@@ -2,218 +2,263 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Controle Financeiro Pro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Finanças Pro</title>
+    
+    <!-- Configurações para o arquivo rodar como APP nativo no celular (Esconde a barra do navegador) -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    
     <style>
         :root {
-            --bg-color: #121214;
-            --card-bg: #202024;
-            --text-color: #e1e1e6;
-            --text-secondary: #a8a8b3;
+            --bg-color: #0f0f12;
+            --card-bg: #18181f;
+            --input-bg: #22222a;
+            --text-color: #ffffff;
+            --text-secondary: #7c7c8a;
             --green: #00b37e;
             --red: #f75a68;
             --blue: #4ea8de;
             --primary-btn: #00875f;
             --primary-btn-hover: #00b37e;
-            --edit-btn: #e2a85c;
+            --border-color: #292934;
         }
 
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
         }
 
         body {
             background-color: var(--bg-color);
             color: var(--text-color);
-            padding: 20px;
-            position: relative;
+            padding: 16px;
+            padding-bottom: 100px;
             min-height: 100vh;
+            font-size: 14px;
         }
 
         .container {
-            max-width: 850px;
+            max-width: 480px;
             margin: 0 auto;
-            padding-bottom: 80px; /* Espaço para o botão flutuante */
         }
 
         header {
             text-align: center;
-            margin-bottom: 20px;
+            margin-bottom: 16px;
+            padding-top: 8px;
         }
 
-        /* NAVEGADOR DE MESES DA TELA */
+        header h1 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: var(--bg-color);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 2000; color: #fff;
+        }
+        .spinner {
+            border: 3px solid rgba(255,255,255,0.1);
+            width: 40px; height: 40px;
+            border-radius: 50%; border-left-color: var(--green);
+            animation: spin 0.8s linear infinite; margin-bottom: 16px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .sync-indicator {
+            display: inline-block;
+            background-color: #1c1c24;
+            padding: 4px 12px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            border-radius: 20px;
+            margin-top: 6px;
+            border: 1px solid var(--border-color);
+        }
+
         .month-navigation {
             display: flex;
             justify-content: space-between;
             align-items: center;
             background-color: var(--card-bg);
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            padding: 10px 12px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            border: 1px solid var(--border-color);
         }
 
         .month-navigation button {
-            width: auto;
-            padding: 8px 15px;
-            background-color: #121214;
-            border: 1px solid #323238;
+            background: none;
+            border: none;
             color: var(--text-color);
-            font-weight: bold;
+            font-size: 1.1rem;
+            padding: 8px;
             cursor: pointer;
-            border-radius: 6px;
-        }
-
-        .month-navigation button:hover {
-            background-color: #323238;
         }
 
         .current-month-display {
-            font-size: 1.2rem;
-            font-weight: bold;
+            font-size: 0.95rem;
+            font-weight: 600;
             text-transform: capitalize;
-            color: var(--blue);
+            color: var(--text-color);
         }
 
-        /* DASHBOARD */
         .dashboard {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 15px;
-            margin-bottom: 30px;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 18px;
         }
 
         .card {
             background-color: var(--card-bg);
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            padding: 14px;
+            border-radius: 14px;
+            border: 1px solid var(--border-color);
         }
 
         .card h3 {
-            font-size: 0.85rem;
+            font-size: 0.75rem;
             color: var(--text-secondary);
-            margin-bottom: 10px;
-            text-transform: uppercase;
+            margin-bottom: 6px;
+            font-weight: 500;
         }
 
         .card .value {
-            font-size: 1.4rem;
-            font-weight: bold;
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: -0.3px;
         }
 
         .card.receitas .value { color: var(--green); }
         .card.despesas .value { color: var(--red); }
         .card.cartao .value { color: var(--blue); }
+        
+        .card.saldo {
+            grid-column: span 2;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 16px;
+            background: linear-gradient(135deg, #18181f 0%, #1c1c27 100%);
+        }
+        .card.saldo h3 { margin-bottom: 0; }
+        .card.saldo .value { font-size: 1.3rem; }
 
-        /* FORMULÁRIOS */
         .form-section {
             background-color: var(--card-bg);
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 30px;
+            padding: 16px;
+            border-radius: 16px;
+            margin-bottom: 18px;
+            border: 1px solid var(--border-color);
         }
 
         .form-section h2 {
-            font-size: 1.2rem;
-            margin-bottom: 15px;
-            border-bottom: 1px solid #323238;
-            padding-bottom: 8px;
+            font-size: 1rem;
+            margin-bottom: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
         }
 
         .form-group {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-            gap: 15px;
-            margin-bottom: 15px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .form-group.two-cols {
+            grid-template-columns: 2fr 1fr;
         }
 
         .checkbox-group {
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin-top: 10px;
+            gap: 6px;
+            margin-top: 8px;
         }
 
         .checkbox-group input {
-            width: auto;
-            cursor: pointer;
+            width: 16px;
+            height: 16px;
+            accent-color: var(--green);
         }
 
         label {
             display: block;
-            font-size: 0.85rem;
+            font-size: 0.75rem;
             color: var(--text-secondary);
-            margin-bottom: 5px;
+            margin-bottom: 4px;
+            font-weight: 500;
         }
 
         input, select {
             width: 100%;
-            padding: 10px;
-            background-color: #121214;
-            border: 1px solid #323238;
-            border-radius: 6px;
+            height: 44px;
+            padding: 0 12px;
+            background-color: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
             color: var(--text-color);
-            font-size: 1rem;
+            font-size: 0.95rem;
+            outline: none;
         }
 
         input:focus, select:focus {
-            outline: 1px solid var(--green);
+            border-color: var(--blue);
         }
 
-        /* Bloco do Cartão */
         .card-extra-fields {
             display: none;
-            background-color: #1a1a1e;
-            padding: 15px;
-            border-radius: 6px;
-            margin-bottom: 15px;
-            border: 1px dashed #323238;
+            background-color: #121217;
+            padding: 12px;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            border: 1px dashed var(--border-color);
         }
 
         .btn-container {
             display: flex;
-            gap: 10px;
+            gap: 8px;
+            margin-top: 4px;
         }
 
         button[type="submit"] {
             width: 100%;
-            padding: 12px;
+            height: 46px;
             background-color: var(--primary-btn);
             color: white;
             border: none;
-            border-radius: 6px;
-            font-size: 1rem;
-            font-weight: bold;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 600;
             cursor: pointer;
         }
 
-        button[type="submit"]:hover {
-            background-color: var(--primary-btn-hover);
-        }
+        button[type="submit"]:hover { background-color: var(--primary-btn-hover); }
+        #cancel-edit-btn { background-color: #32323e; width: auto; padding: 0 16px; border-radius: 10px; color: var(--text-color); border: none; }
 
-        #cancel-edit-btn {
-            background-color: #505059;
-            width: auto;
-            padding: 0 20px;
-        }
-        #cancel-edit-btn:hover {
-            background-color: #70707c;
-        }
-
-        /* HISTÓRICO */
         .history-section {
             background-color: var(--card-bg);
-            padding: 20px;
-            border-radius: 8px;
+            padding: 16px;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
         }
 
         .history-section h2 {
-            font-size: 1.2rem;
-            margin-bottom: 15px;
+            font-size: 1rem;
+            margin-bottom: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
         }
 
         .transaction-list {
@@ -223,61 +268,63 @@
         .transaction-item {
             display: flex;
             flex-direction: column;
-            background-color: #121214;
-            margin-bottom: 10px;
-            border-radius: 6px;
-            border-left: 4px solid #fff;
-            padding: 12px 15px;
+            padding: 12px 0;
+            border-bottom: 1px solid #22222a;
         }
-
-        .transaction-item.entrada { border-left-color: var(--green); }
-        .transaction-item.saida { border-left-color: var(--red); }
-        .transaction-item.credito { border-left-color: var(--blue); }
+        .transaction-item:last-child {
+            border-bottom: none;
+        }
 
         .item-main-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            width: 100%;
+        }
+
+        .transaction-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
         }
 
         .transaction-info .desc {
             font-weight: 500;
-            display: block;
+            font-size: 0.95rem;
+            color: var(--text-color);
         }
 
         .transaction-info .details {
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             color: var(--text-secondary);
         }
 
         .transaction-amount {
-            font-weight: bold;
+            font-weight: 600;
+            font-size: 0.95rem;
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
         }
+
+        .transaction-item.entrada .amount-val { color: var(--green); }
+        .transaction-item.saida .amount-val { color: var(--text-color); }
+        .transaction-item.credito .amount-val { color: var(--blue); }
 
         .action-btn {
             background: none;
             border: none;
+            font-size: 1rem;
+            padding: 6px;
             cursor: pointer;
-            font-size: 0.95rem;
-            padding: 2px;
-            transition: transform 0.1s;
-        }
-        .action-btn:hover {
-            transform: scale(1.2);
         }
 
         .invoice-details-box {
             display: none;
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px dashed #323238;
-            background-color: #18181c;
-            border-radius: 4px;
-            padding: 10px;
+            margin-top: 8px;
+            padding: 4px 8px;
+            background-color: #121217;
+            border-radius: 8px;
+            border-left: 3px solid var(--blue);
         }
 
         .invoice-subitem {
@@ -285,236 +332,202 @@
             justify-content: space-between;
             align-items: center;
             font-size: 0.85rem;
-            padding: 6px 8px;
-            border-bottom: 1px solid #202024;
+            padding: 10px 0;
+            border-bottom: 1px solid #1c1c24;
         }
-        .invoice-subitem:last-child {
-            border-bottom: none;
-        }
+        .invoice-subitem:last-child { border-bottom: none; }
 
-        /* 🧮 BOTÃO E POPUP DA CALCULADORA */
         .calc-toggle-btn {
             position: fixed;
-            bottom: 25px;
-            right: 25px;
-            width: 60px;
-            height: 60px;
+            bottom: 20px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
             background-color: var(--blue);
             color: white;
             border-radius: 50%;
             border: none;
-            font-size: 1.8rem;
+            font-size: 1.6rem;
             cursor: pointer;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
             display: flex;
             align-items: center;
             justify-content: center;
             z-index: 999;
-            transition: transform 0.2s;
         }
-        .calc-toggle-btn:hover {
-            transform: scale(1.1);
-            background-color: #3a8cb8;
-        }
-
+        
         .calc-container {
             display: none;
             position: fixed;
-            bottom: 95px;
-            right: 25px;
-            width: 260px;
-            background-color: #202024;
-            border: 2px solid #323238;
-            border-radius: 10px;
-            padding: 15px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+            bottom: 85px;
+            right: 20px;
+            width: 280px;
+            background-color: #1c1c24;
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
             z-index: 1000;
         }
 
         .calc-display {
             width: 100%;
-            height: 45px;
-            background-color: #121214;
-            border: 1px solid #323238;
-            border-radius: 6px;
+            height: 48px;
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
             color: #fff;
             text-align: right;
-            padding: 10px;
-            font-size: 1.2rem;
-            margin-bottom: 12px;
+            padding: 0 12px;
+            font-size: 1.3rem;
+            margin-bottom: 10px;
         }
 
         .calc-buttons {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 8px;
+            gap: 6px;
         }
 
         .calc-btn {
-            padding: 12px;
-            background-color: #29292e;
+            height: 44px;
+            background-color: #2a2a35;
             border: none;
-            border-radius: 6px;
+            border-radius: 8px;
             color: #fff;
-            font-weight: bold;
-            cursor: pointer;
+            font-weight: 600;
             font-size: 1rem;
+            cursor: pointer;
         }
-        .calc-btn:hover {
-            background-color: #323238;
-        }
-        .calc-btn.operator {
-            background-color: #323238;
-            color: var(--blue);
-        }
-        .calc-btn.operator:hover {
-            background-color: #4ea8de;
-            color: #fff;
-        }
-        .calc-btn.clear {
-            background-color: var(--red);
-        }
-        .calc-btn.equal {
-            background-color: var(--green);
-            grid-column: span 2;
-        }
+        .calc-btn.operator { background-color: #343444; color: var(--blue); }
+        .calc-btn.clear { background-color: var(--red); }
+        .calc-btn.equal { background-color: var(--green); grid-column: span 2; }
     </style>
 </head>
 <body>
 
+    <div id="loading-screen" class="loading-overlay">
+        <div class="spinner"></div>
+        <div id="loading-text" style="font-weight:500; font-size:0.95rem;">Carregando app...</div>
+    </div>
+
     <div class="container">
         <header>
-            <h1>📊 Meu Controle Financeiro Pro</h1>
+            <h1>📊 Nosso Financeiro</h1>
+            <div class="sync-indicator" id="sync-status">Sincronizando...</div>
         </header>
 
-        <!-- NAVEGAÇÃO DE MESES DA VIZUALIZAÇÃO -->
         <div class="month-navigation">
-            <button id="prev-month">◀ Mês Anterior</button>
+            <button id="prev-month">◀</button>
             <div class="current-month-display" id="current-month-display">...</div>
-            <button id="next-month">Próximo Mês ▶</button>
+            <button id="next-month">▶</button>
         </div>
 
-        <!-- DASHBOARD -->
         <section class="dashboard">
             <div class="card receitas">
                 <h3>Receitas</h3>
-                <div class="value" id="balance-income">R$ 0,00</div>
+                <div class="value" id="balance-income">R$ 0</div>
             </div>
             <div class="card despesas">
-                <h3>Despesas (Pix/Din)</h3>
-                <div class="value" id="balance-expense">R$ 0,00</div>
+                <h3>Pix/Dinheiro</h3>
+                <div class="value" id="balance-expense">R$ 0</div>
             </div>
             <div class="card cartao">
-                <h3>Fatura Cartão</h3>
-                <div class="value" id="balance-card">R$ 0,00</div>
+                <h3>Cartões</h3>
+                <div class="value" id="balance-card">R$ 0</div>
             </div>
             <div class="card saldo">
-                <h3>Saldo do Mês</h3>
-                <div class="value" id="balance-total">R$ 0,00</div>
+                <h3>Saldo Total</h3>
+                <div class="value" id="balance-total">R$ 0</div>
             </div>
         </section>
 
-        <!-- FORMULÁRIOS -->
         <section class="form-section">
-            <h2 id="form-title">Nova Transação</h2>
+            <h2 id="form-title">Novo Lançamento</h2>
             <form id="finance-form">
                 <div class="form-group">
                     <div>
                         <label for="day-select">Dia</label>
                         <select id="day-select"></select>
                     </div>
-                    <!-- DESTINO INTELIGENTE DO MÊS/ANO -->
                     <div>
-                        <label for="target-month-select">Mês de Destino</label>
+                        <label for="target-month-select">Mês</label>
                         <select id="target-month-select">
-                            <option value="0">Janeiro</option>
-                            <option value="1">Fevereiro</option>
-                            <option value="2">Março</option>
-                            <option value="3">Abril</option>
-                            <option value="4">Maio</option>
-                            <option value="5">Junho</option>
-                            <option value="6">Julho</option>
-                            <option value="7">Agosto</option>
-                            <option value="8">Setembro</option>
-                            <option value="9">Outubro</option>
-                            <option value="10">Novembro</option>
-                            <option value="11">Dezembro</option>
+                            <option value="0">Jan</option> <option value="1">Fev</option>
+                            <option value="2">Mar</option> <option value="3">Abr</option>
+                            <option value="4">Mai</option> <option value="5">Jun</option>
+                            <option value="6">Jul</option> <option value="7">Ago</option>
+                            <option value="8">Set</option> <option value="9">Out</option>
+                            <option value="10">Nov</option> <option value="11">Dez</option>
                         </select>
                     </div>
                     <div>
-                        <label for="target-year-select">Ano de Destino</label>
+                        <label for="target-year-select">Ano</label>
                         <select id="target-year-select"></select>
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <div style="grid-column: span 2;">
+                <div class="form-group two-cols">
+                    <div>
                         <label for="description">Descrição</label>
-                        <input type="text" id="description" placeholder="Ex: Salário, Mercado..." required>
+                        <input type="text" id="description" placeholder="Ex: Mercado, Salário" required>
                     </div>
                     <div>
-                        <label for="amount">Valor Total (R$)</label>
+                        <label for="amount">Valor (R$)</label>
                         <input type="text" id="amount" placeholder="0.00" required>
                     </div>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group two-cols">
                     <div>
-                        <label for="type">Tipo de Transação</label>
+                        <label for="type">Tipo</label>
                         <select id="type">
-                            <option value="entrada">Receita (Entrada)</option>
-                            <option value="saida">Despesa (Dinheiro/Pix)</option>
+                            <option value="entrada">Receita (+)</option>
+                            <option value="saida">Pix/Dinheiro (-)</option>
                             <option value="credito">Cartão de Crédito</option>
                         </select>
                         <div class="checkbox-group" id="fixed-wrapper">
                             <input type="checkbox" id="is-fixed">
-                            <label for="is-fixed" id="fixed-label">Repetir como Fixo</label>
+                            <label for="is-fixed" id="fixed-label">Fixo</label>
                         </div>
                     </div>
                     <div>
-                        <label for="installments">Parcelamento (Meses)</label>
+                        <label for="installments">Parcelas</label>
                         <select id="installments"></select>
                     </div>
                 </div>
 
-                <!-- CAMPOS EXTRA DO CARTÃO DE CRÉDITO -->
                 <div class="card-extra-fields" id="card-fields">
-                    <div class="form-group">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                         <div>
-                            <label for="card-name-select">Selecione o Cartão</label>
+                            <label for="card-name-select">Qual Cartão?</label>
                             <select id="card-name-select"></select>
-                            <input type="text" id="card-name-custom" placeholder="Digite o nome do novo cartão..." style="margin-top:8px; display:none;">
+                            <input type="text" id="card-name-custom" placeholder="Nome do cartão..." style="margin-top:8px; display:none; height:38px;">
                         </div>
                         <div>
-                            <label for="card-brand">Bandeira do Cartão</label>
+                            <label for="card-brand">Bandeira</label>
                             <select id="card-brand">
-                                <option value="Visa">Visa</option>
-                                <option value="Mastercard">Mastercard</option>
-                                <option value="Elo">Elo</option>
-                                <option value="American Express">American Express</option>
-                                <option value="Diners Club">Diners Club</option>
-                                <option value="Hipercard">Hipercard</option>
+                                <option value="Visa">Visa</option> <option value="Mastercard">Mastercard</option>
+                                <option value="Elo">Elo</option> <option value="Amex">Amex</option>
                             </select>
                         </div>
                     </div>
                 </div>
 
                 <div class="btn-container">
-                    <button type="submit" id="submit-btn">Adicionar Transação</button>
-                    <button type="button" id="cancel-edit-btn" style="display: none;">Cancelar</button>
+                    <button type="submit" id="submit-btn">Salvar Registro</button>
+                    <button type="button" id="cancel-edit-btn" style="display: none;">X</button>
                 </div>
             </form>
         </section>
 
-        <!-- HISTÓRICO -->
         <section class="history-section">
-            <h2>Lançamentos deste Mês</h2>
+            <h2>Extrato Mensal</h2>
             <ul class="transaction-list" id="transaction-list"></ul>
         </section>
     </div>
 
-    <!-- 🧮 ESTRUTURA DA CALCULADORA FLUTUANTE -->
-    <button class="calc-toggle-btn" onclick="toggleCalc()" title="Abrir Calculadora">🧮</button>
+    <button class="calc-toggle-btn" onclick="toggleCalc()">🧮</button>
     <div class="calc-container" id="calc-popup">
         <input type="text" class="calc-display" id="calc-screen" readonly value="0">
         <div class="calc-buttons">
@@ -522,36 +535,33 @@
             <button class="calc-btn operator" onclick="pressOp('/')">/</button>
             <button class="calc-btn operator" onclick="pressOp('*')">x</button>
             <button class="calc-btn operator" onclick="pressOp('-')">-</button>
-            
             <button class="calc-btn" onclick="pressNum('7')">7</button>
             <button class="calc-btn" onclick="pressNum('8')">8</button>
             <button class="calc-btn" onclick="pressNum('9')">9</button>
             <button class="calc-btn operator" onclick="pressOp('+')">+</button>
-            
             <button class="calc-btn" onclick="pressNum('4')">4</button>
             <button class="calc-btn" onclick="pressNum('5')">5</button>
             <button class="calc-btn" onclick="pressNum('6')">6</button>
             <button class="calc-btn" onclick="pressNum('.')">,</button>
-            
             <button class="calc-btn" onclick="pressNum('1')">1</button>
             <button class="calc-btn" onclick="pressNum('2')">2</button>
             <button class="calc-btn" onclick="pressNum('3')">3</button>
             <button class="calc-btn equal" onclick="calculateResult()">=</button>
-            
             <button class="calc-btn" style="grid-column: span 2;" onclick="pressNum('0')">0</button>
         </div>
     </div>
 
     <script>
+        // LINK GERADO DO SEU GOOGLE SCRIPT INJETADO DIRETAMENTE AQUI
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxk0W3IPE-yQRh-qA7pN_-wHkb6EMO61s8wrpFHCFIhXuRwUuR_xwlyaaaudP4tfEEv/exec";
+
         const form = document.getElementById('finance-form');
         const formTitle = document.getElementById('form-title');
         const submitBtn = document.getElementById('submit-btn');
         const cancelEditBtn = document.getElementById('cancel-edit-btn');
-        
         const daySelect = document.getElementById('day-select');
         const targetMonthSelect = document.getElementById('target-month-select');
         const targetYearSelect = document.getElementById('target-year-select');
-        
         const descriptionInput = document.getElementById('description');
         const amountInput = document.getElementById('amount');
         const typeSelect = document.getElementById('type');
@@ -559,72 +569,84 @@
         const isFixedCheckbox = document.getElementById('is-fixed');
         const fixedWrapper = document.getElementById('fixed-wrapper');
         const fixedLabel = document.getElementById('fixed-label');
-        
         const cardFields = document.getElementById('card-fields');
         const cardNameSelect = document.getElementById('card-name-select');
         const cardNameCustom = document.getElementById('card-name-custom');
         const cardBrandSelect = document.getElementById('card-brand');
-        
         const transactionList = document.getElementById('transaction-list');
         const balanceIncome = document.getElementById('balance-income');
         const balanceExpense = document.getElementById('balance-expense');
         const balanceCard = document.getElementById('balance-card');
         const balanceTotal = document.getElementById('balance-total');
         const monthDisplay = document.getElementById('current-month-display');
+        const loadingScreen = document.getElementById('loading-screen');
+        const syncStatus = document.getElementById('sync-status');
 
         let currentDate = new Date();
-        let transactions = JSON.parse(localStorage.getItem('meu_app_financeiro_final')) || [];
+        let transactions = [];
         let editingTransactionId = null;
 
-        // Monta o seletor de Anos no formulário (Ano atual e próximos 10 anos)
+        async function loadTransactionsFromCloud() {
+            showLoading("Buscando dados na nuvem...");
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL);
+                transactions = await response.json();
+                syncStatus.innerText = "Nuvem Conectada ✅";
+            } catch (err) {
+                syncStatus.innerText = "Erro ao carregar ⚠️";
+            }
+            hideLoading(); updateUI();
+        }
+
+        async function saveTransactionsToCloud() {
+            showLoading("Salvando registros...");
+            try {
+                await fetch(GOOGLE_SCRIPT_URL, {
+                    method: "POST", mode: "no-cors",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "saveAll", transactions: transactions })
+                });
+                syncStatus.innerText = "Salvo na nuvem! ✅";
+            } catch (err) {
+                alert("Erro de conexão.");
+            }
+            hideLoading(); updateUI();
+        }
+
+        function showLoading(text) { document.getElementById('loading-text').innerText = text; loadingScreen.style.display = 'flex'; }
+        function hideLoading() { loadingScreen.style.display = 'none'; }
+
         function buildYearDropdowns() {
             targetYearSelect.innerHTML = '';
             const currentYear = new Date().getFullYear();
-            for(let y = currentYear; y <= currentYear + 10; y++) {
-                let opt = document.createElement('option');
-                opt.value = y;
-                opt.text = y;
-                targetYearSelect.appendChild(opt);
+            for(let y = currentYear; y <= currentYear + 5; y++) {
+                let opt = document.createElement('option'); opt.value = y; opt.text = y; targetYearSelect.appendChild(opt);
             }
         }
 
-        // Sincroniza os dropdowns do formulário com o mês corrente que o usuário está olhando
         function syncFormDateSelectors() {
-            if (editingTransactionId === null) {
-                targetMonthSelect.value = currentDate.getMonth();
-                targetYearSelect.value = currentDate.getFullYear();
-            }
+            if (editingTransactionId === null) { targetMonthSelect.value = currentDate.getMonth(); targetYearSelect.value = currentDate.getFullYear(); }
             updateDaysDropdown();
         }
 
         function updateDaysDropdown() {
             const currentSelectedDay = daySelect.value;
             daySelect.innerHTML = '';
-            
-            // Baseia os dias de acordo com o mês/ano de destino escolhido no formulário
             const year = parseInt(targetYearSelect.value) || currentDate.getFullYear();
             const month = parseInt(targetMonthSelect.value) || currentDate.getMonth();
             const daysInMonth = new Date(year, month + 1, 0).getDate();
 
             for (let d = 1; d <= daysInMonth; d++) {
-                let option = document.createElement('option');
-                option.value = d;
-                option.text = d < 10 ? '0' + d : d;
-                daySelect.appendChild(option);
+                let option = document.createElement('option'); option.value = d; option.text = d < 10 ? '0' + d : d; daySelect.appendChild(option);
             }
-            if (currentSelectedDay && currentSelectedDay <= daysInMonth) {
-                daySelect.value = currentSelectedDay;
-            } else {
+            if (currentSelectedDay && currentSelectedDay <= daysInMonth) { daySelect.value = currentSelectedDay; } 
+            else {
                 const today = new Date();
-                if(today.getMonth() === month && today.getFullYear() === year) {
-                    daySelect.value = today.getDate();
-                } else {
-                    daySelect.value = 1;
-                }
+                if(today.getMonth() === month && today.getFullYear() === year) { daySelect.value = today.getDate(); } 
+                else { daySelect.value = 1; }
             }
         }
 
-        // Escuta mudanças de mês/ano no formulário para ajustar a contagem de dias
         targetMonthSelect.addEventListener('change', updateDaysDropdown);
         targetYearSelect.addEventListener('change', updateDaysDropdown);
 
@@ -632,112 +654,61 @@
             cardNameSelect.innerHTML = '';
             let uniqueCards = [];
             transactions.forEach(t => {
-                if (t.type === 'credito' && t.cardName && !uniqueCards.includes(t.cardName)) {
-                    uniqueCards.push(t.cardName);
-                }
+                if (t.type === 'credito' && t.cardName && !uniqueCards.includes(t.cardName)) { uniqueCards.push(t.cardName); }
             });
             uniqueCards.forEach(card => {
-                let opt = document.createElement('option');
-                opt.value = card;
-                opt.text = card;
-                cardNameSelect.appendChild(opt);
+                let opt = document.createElement('option'); opt.value = card; opt.text = card; cardNameSelect.appendChild(opt);
             });
-            let addNewOpt = document.createElement('option');
-            addNewOpt.value = "__NEW__";
-            addNewOpt.text = "➕ Cadastrar Novo Cartão";
-            cardNameSelect.appendChild(addNewOpt);
+            let addNewOpt = document.createElement('option'); addNewOpt.value = "__NEW__"; addNewOpt.text = "+ Novo Cartão"; cardNameSelect.appendChild(addNewOpt);
             handleCardSelectChange();
         }
 
         function handleCardSelectChange() {
-            if (cardNameSelect.value === "__NEW__") {
-                cardNameCustom.style.display = "block";
-                cardNameCustom.required = true;
-            } else {
-                cardNameCustom.style.display = "none";
-                cardNameCustom.required = false;
-            }
+            if (cardNameSelect.value === "__NEW__") { cardNameCustom.style.display = "block"; cardNameCustom.required = true; } 
+            else { cardNameCustom.style.display = "none"; cardNameCustom.required = false; }
         }
         cardNameSelect.addEventListener('change', handleCardSelectChange);
 
         function buildInstallmentDropdown() {
             installmentsSelect.innerHTML = '';
-            for (let i = 1; i <= 120; i++) {
-                let option = document.createElement('option');
-                option.value = i;
-                option.text = i === 1 ? 'À vista (1x)' : i + 'x';
-                installmentsSelect.appendChild(option);
+            for (let i = 1; i <= 24; i++) {
+                let option = document.createElement('option'); option.value = i; option.text = i === 1 ? '1x (À vista)' : i + 'x'; installmentsSelect.appendChild(option);
             }
         }
 
         function handleTypeFieldsChange() {
             const currentType = typeSelect.value;
-            if (currentType === 'credito') {
-                cardFields.style.display = 'block';
-                updateCardListDropdown();
-            } else {
-                cardFields.style.display = 'none';
-                cardNameCustom.required = false;
-            }
+            if (currentType === 'credito') { cardFields.style.display = 'block'; updateCardListDropdown(); } 
+            else { cardFields.style.display = 'none'; cardNameCustom.required = false; }
 
-            if (currentType === 'entrada') {
-                fixedLabel.innerText = "Repetir como Receita Fixa";
-                fixedWrapper.style.display = 'flex';
-            } else if (currentType === 'saida') {
-                fixedLabel.innerText = "Repetir como Despesa Fixa";
-                fixedWrapper.style.display = 'flex';
-            } else {
-                fixedLabel.innerText = "Repetir como Fatura Fixa";
-                fixedWrapper.style.display = 'flex';
-            }
+            if (currentType === 'entrada') { fixedLabel.innerText = "Fixo"; fixedWrapper.style.display = 'flex'; } 
+            else if (currentType === 'saida') { fixedLabel.innerText = "Fixo"; fixedWrapper.style.display = 'flex'; } 
+            else { fixedLabel.innerText = "Fixo"; fixedWrapper.style.display = 'flex'; }
         }
 
         typeSelect.addEventListener('change', handleTypeFieldsChange);
 
         isFixedCheckbox.addEventListener('change', () => {
-            if (isFixedCheckbox.checked) {
-                installmentsSelect.value = "1";
-                installmentsSelect.disabled = true;
-            } else {
-                installmentsSelect.disabled = false;
-            }
+            if (isFixedCheckbox.checked) { installmentsSelect.value = "1"; installmentsSelect.disabled = true; } 
+            else { installmentsSelect.disabled = false; }
         });
 
-        document.getElementById('prev-month').addEventListener('click', () => {
-            currentDate.setMonth(currentDate.getMonth() - 1);
-            syncFormDateSelectors();
-            updateUI();
-        });
+        document.getElementById('prev-month').addEventListener('click', () => { currentDate.setMonth(currentDate.getMonth() - 1); syncFormDateSelectors(); updateUI(); });
+        document.getElementById('next-month').addEventListener('click', () => { currentDate.setMonth(currentDate.getMonth() + 1); syncFormDateSelectors(); updateUI(); });
 
-        document.getElementById('next-month').addEventListener('click', () => {
-            currentDate.setMonth(currentDate.getMonth() + 1);
-            syncFormDateSelectors();
-            updateUI();
-        });
-
-        function formatCurrency(value) {
-            return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        }
-
+        function formatCurrency(value) { return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
         function toggleInvoiceDetails(cardName) {
             const element = document.getElementById(`invoice-box-${cardName.replace(/\s+/g, '-')}`);
-            if(element) {
-                element.style.display = element.style.display === 'block' ? 'none' : 'block';
-            }
+            if(element) { element.style.display = element.style.display === 'block' ? 'none' : 'block'; }
         }
 
         function updateUI() {
             transactionList.innerHTML = ''; 
             const targetMonth = currentDate.getMonth();
             const targetYear = currentDate.getFullYear();
+            monthDisplay.innerText = currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
-            const stringDate = currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-            monthDisplay.innerText = stringDate;
-
-            let income = 0;
-            let expense = 0;
-            let cardValue = 0;
-
+            let income = 0, expense = 0, cardValue = 0;
             let currentMonthTransactions = transactions.filter(t => t.month === targetMonth && t.year === targetYear);
             let normalItems = currentMonthTransactions.filter(t => t.type !== 'credito');
             let cardItems = currentMonthTransactions.filter(t => t.type === 'credito');
@@ -752,19 +723,19 @@
             normalItems.forEach((t) => {
                 const li = document.createElement('li');
                 li.classList.add('transaction-item', t.type);
-                let detailsText = t.isFixed ? (t.type === 'entrada' ? 'Receita Fixa' : 'Despesa Fixa') : ('(' + t.installmentText + ')');
+                let detailsText = t.isFixed ? 'Fixo' : t.installmentText;
                 const formattedDay = t.day < 10 ? '0' + t.day : t.day;
 
                 li.innerHTML = `
                     <div class="item-main-row">
                         <div class="transaction-info">
-                            <span class="desc"><strong>Dia ${formattedDay}</strong> - ${t.description}</span>
-                            <span class="details">${detailsText}</span>
+                            <span class="desc">${t.description}</span>
+                            <span class="details">Dia ${formattedDay} • ${detailsText}</span>
                         </div>
                         <div class="transaction-amount">
-                            <span>${formatCurrency(t.amount)}</span>
-                            <button class="action-btn" title="Editar" onclick="startEdit(${t.id})">✏️</button>
-                            <button class="action-btn" title="Deletar" onclick="deleteTransaction(${t.id}, '${t.groupId}')">❌</button>
+                            <span class="amount-val">${formatCurrency(t.amount)}</span>
+                            <button class="action-btn" onclick="startEdit(${t.id})">✏️</button>
+                            <button class="action-btn" onclick="deleteTransaction(${t.id}, '${t.groupId}')">❌</button>
                         </div>
                     </div>
                 `;
@@ -773,9 +744,7 @@
 
             let cardsGrouped = {};
             cardItems.forEach(item => {
-                if (!cardsGrouped[item.cardName]) {
-                    cardsGrouped[item.cardName] = { totalAmount: 0, brand: item.cardBrand || 'Visa', items: [] };
-                }
+                if (!cardsGrouped[item.cardName]) { cardsGrouped[item.cardName] = { totalAmount: 0, brand: item.cardBrand || 'Visa', items: [] }; }
                 cardsGrouped[item.cardName].totalAmount += item.amount;
                 cardsGrouped[item.cardName].items.push(item);
             });
@@ -791,14 +760,14 @@
                     const subDay = sub.day < 10 ? '0' + sub.day : sub.day;
                     return `
                         <div class="invoice-subitem">
-                            <div>
-                                <span class="sub-desc"><strong>Dia ${subDay}</strong> - ${sub.description}</span>
-                                <span class="sub-meta">(${sub.isFixed ? 'Fixa' : sub.installmentText})</span>
+                            <div class="transaction-info">
+                                <span class="desc" style="font-size:0.85rem;">${sub.description}</span>
+                                <span class="details">Dia ${subDay} • ${sub.isFixed ? 'Fixo' : sub.installmentText}</span>
                             </div>
                             <div class="transaction-amount" style="font-size:0.85rem;">
                                 <span>${formatCurrency(sub.amount)}</span>
-                                <button class="action-btn" style="font-size:0.8rem;" title="Editar" onclick="startEdit(${sub.id})">✏️</button>
-                                <button class="action-btn" style="font-size:0.8rem;" title="Deletar" onclick="deleteTransaction(${sub.id}, '${sub.groupId}')">❌</button>
+                                <button class="action-btn" style="font-size:0.8rem;" onclick="startEdit(${sub.id})">✏️</button>
+                                <button class="action-btn" style="font-size:0.8rem;" onclick="deleteTransaction(${sub.id}, '${sub.groupId}')">❌</button>
                             </div>
                         </div>
                     `;
@@ -807,12 +776,12 @@
                 li.innerHTML = `
                     <div class="item-main-row">
                         <div class="transaction-info">
-                            <span class="desc">💳 FATURA - <strong>${cardName}</strong></span>
-                            <span class="details">Bandeira: ${cardData.brand} | ${cardData.items.length} compra(s)</span>
+                            <span class="desc">💳 ${cardName}</span>
+                            <span class="details">${cardData.items.length} compras neste mês</span>
                         </div>
                         <div class="transaction-amount">
-                            <span style="color: var(--blue);">${formatCurrency(cardData.totalAmount)}</span>
-                            <button class="action-btn" title="Ver Compras" onclick="toggleInvoiceDetails('${cardName}')">👁️</button>
+                            <span class="amount-val">${formatCurrency(cardData.totalAmount)}</span>
+                            <button class="action-btn" onclick="toggleInvoiceDetails('${cardName}')">👁️</button>
                         </div>
                     </div>
                     <div class="invoice-details-box" id="${boxId}">
@@ -833,108 +802,60 @@
         function startEdit(id) {
             const transaction = transactions.find(t => t.id === id);
             if (!transaction) return;
-
             editingTransactionId = id;
             formTitle.innerText = "✏️ Editando Lançamento";
-            submitBtn.innerText = "Salvar Alteração";
+            submitBtn.innerText = "Atualizar";
             cancelEditBtn.style.display = "block";
-
-            // Seta a data do form exatamente para as coordenadas do item em edição
             targetMonthSelect.value = transaction.month;
             targetYearSelect.value = transaction.year;
             updateDaysDropdown();
-            
             daySelect.value = transaction.day;
             descriptionInput.value = transaction.description;
             amountInput.value = transaction.amount.toFixed(2);
             typeSelect.value = transaction.type;
-            
             handleTypeFieldsChange();
-
-            if (transaction.type === 'credito') {
-                cardNameSelect.value = transaction.cardName;
-                cardNameCustom.value = transaction.cardName;
-                cardBrandSelect.value = transaction.cardBrand || 'Visa';
-            }
-
+            if (transaction.type === 'credito') { cardNameSelect.value = transaction.cardName; cardNameCustom.value = transaction.cardName; cardBrandSelect.value = transaction.cardBrand || 'Visa'; }
             fixedWrapper.style.display = 'none';
             installmentsSelect.parentElement.style.display = 'none';
             form.scrollIntoView({ behavior: 'smooth' });
         }
 
         function cancelEdit() {
-            editingTransactionId = null;
-            formTitle.innerText = "Nova Transação";
-            submitBtn.innerText = "Adicionar Transação";
-            cancelEditBtn.style.display = "none";
-            installmentsSelect.parentElement.style.display = 'block';
-            form.reset();
-            handleTypeFieldsChange();
-            syncFormDateSelectors();
+            editingTransactionId = null; formTitle.innerText = "Novo Lançamento"; submitBtn.innerText = "Salvar Registro"; cancelEditBtn.style.display = "none";
+            installmentsSelect.parentElement.style.display = 'block'; form.reset(); handleTypeFieldsChange(); syncFormDateSelectors();
         }
-
         cancelEditBtn.addEventListener('click', cancelEdit);
 
         form.addEventListener('submit', (e) => {
             e.preventDefault(); 
-
             const chosenDay = parseInt(daySelect.value);
             const description = descriptionInput.value.trim();
             let cleanedAmount = amountInput.value.replace(',', '.');
             const fullAmount = parseFloat(cleanedAmount);
 
-            if (isNaN(fullAmount) || fullAmount <= 0) {
-                alert("Por favor, digite um valor válido.");
-                return;
-            }
+            if (isNaN(fullAmount) || fullAmount <= 0) { alert("Valor inválido."); return; }
 
             let finalCardName = "";
             if (typeSelect.value === 'credito') {
-                if (cardNameSelect.value === "__NEW__") {
-                    finalCardName = cardNameCustom.value.trim();
-                } else {
-                    finalCardName = cardNameSelect.value;
-                }
-                if(!finalCardName) {
-                    alert("Indique o nome do cartão.");
-                    return;
-                }
+                if (cardNameSelect.value === "__NEW__") { finalCardName = cardNameCustom.value.trim(); } else { finalCardName = cardNameSelect.value; }
+                if(!finalCardName) { alert("Identifique o cartão."); return; }
             }
 
-            // CAPTURA DO MÊS/ANO DE DESTINO DEFINIDO PELO USUÁRIO
             let baseMonth = parseInt(targetMonthSelect.value);
             let baseYear = parseInt(targetYearSelect.value);
 
-            // MODO EDIÇÃO
             if (editingTransactionId !== null) {
                 transactions = transactions.map(t => {
                     if (t.id === editingTransactionId) {
-                        let updated = {
-                            ...t,
-                            day: chosenDay,
-                            month: baseMonth,
-                            year: baseYear,
-                            description: description,
-                            amount: fullAmount,
-                            type: typeSelect.value
-                        };
-                        if (typeSelect.value === 'credito') {
-                            updated.cardName = finalCardName;
-                            updated.cardBrand = cardBrandSelect.value;
-                        }
+                        let updated = { ...t, day: chosenDay, month: baseMonth, year: baseYear, description: description, amount: fullAmount, type: typeSelect.value };
+                        if (typeSelect.value === 'credito') { updated.cardName = finalCardName; updated.cardBrand = cardBrandSelect.value; }
                         return updated;
                     }
                     return t;
                 });
-
-                alert("Lançamento atualizado com sucesso!");
-                cancelEdit();
-                localStorage.setItem('meu_app_financeiro_final', JSON.stringify(transactions));
-                updateUI();
-                return;
+                cancelEdit(); saveTransactionsToCloud(); return;
             }
 
-            // MODO CADASTRO
             const type = typeSelect.value;
             const installments = parseInt(installmentsSelect.value);
             const isFixed = isFixedCheckbox.checked;
@@ -945,145 +866,59 @@
                     let fDate = new Date(baseYear, baseMonth + i, 1);
                     let maxDays = new Date(fDate.getFullYear(), fDate.getMonth() + 1, 0).getDate();
                     let safeDay = chosenDay > maxDays ? maxDays : chosenDay;
-
-                    let item = {
-                        id: Date.now() + i,
-                        groupId: groupId,
-                        day: safeDay,
-                        description: description,
-                        amount: fullAmount,
-                        type: type,
-                        isFixed: true,
-                        installmentText: 'Fixa',
-                        month: fDate.getMonth(),
-                        year: fDate.getFullYear()
-                    };
+                    let item = { id: Date.now() + i, groupId: groupId, day: safeDay, description: description, amount: fullAmount, type: type, isFixed: true, installmentText: 'Fixo', month: fDate.getMonth(), year: fDate.getFullYear() };
                     if (type === 'credito') { item.cardName = finalCardName; item.cardBrand = cardBrandSelect.value; }
                     transactions.push(item);
                 }
-                alert("Lançamento fixo gravado!");
-
             } else if (installments > 1) {
                 const partAmount = fullAmount / installments;
                 for (let i = 0; i < installments; i++) {
                     let fDate = new Date(baseYear, baseMonth + i, 1);
                     let maxDays = new Date(fDate.getFullYear(), fDate.getMonth() + 1, 0).getDate();
                     let safeDay = chosenDay > maxDays ? maxDays : chosenDay;
-
-                    let item = {
-                        id: Date.now() + i,
-                        groupId: groupId,
-                        day: safeDay,
-                        description: description,
-                        amount: partAmount,
-                        type: type,
-                        isFixed: false,
-                        installmentText: 'Parcela ' + (i + 1) + ' de ' + installments,
-                        month: fDate.getMonth(),
-                        year: fDate.getFullYear()
-                    };
+                    let item = { id: Date.now() + i, groupId: groupId, day: safeDay, description: description, amount: partAmount, type: type, isFixed: false, installmentText: (i + 1) + '/' + installments, month: fDate.getMonth(), year: fDate.getFullYear() };
                     if (type === 'credito') { item.cardName = finalCardName; item.cardBrand = cardBrandSelect.value; }
                     transactions.push(item);
                 }
-                alert("Parcelamento gravado!");
-
             } else {
-                let item = {
-                    id: Date.now(),
-                    groupId: groupId,
-                    day: chosenDay,
-                    description: description,
-                    amount: fullAmount,
-                    type: type,
-                    isFixed: false,
-                    installmentText: 'À vista',
-                    month: baseMonth,
-                    year: baseYear
-                };
+                let item = { id: Date.now(), groupId: groupId, day: chosenDay, description: description, amount: fullAmount, type: type, isFixed: false, installmentText: 'À vista', month: baseMonth, year: baseYear };
                 if (type === 'credito') { item.cardName = finalCardName; item.cardBrand = cardBrandSelect.value; }
                 transactions.push(item);
-                alert("Lançamento gravado!");
             }
 
-            localStorage.setItem('meu_app_financeiro_final', JSON.stringify(transactions));
-            updateUI();
-            form.reset();
-            cardFields.style.display = 'none';
-            handleTypeFieldsChange();
-            syncFormDateSelectors();
+            form.reset(); cardFields.style.display = 'none'; handleTypeFieldsChange(); syncFormDateSelectors(); saveTransactionsToCloud();
         });
 
         function deleteTransaction(id, groupId) {
             const complex = transactions.some(t => t.groupId === groupId && t.id !== id);
             if (complex) {
-                if (confirm("Deseja apagar TODOS os meses vinculados a este item?")) {
-                    transactions = transactions.filter(t => t.groupId !== groupId);
-                } else {
-                    if(confirm("Deseja apagar APENAS este mês selecionado?")) {
-                        transactions = transactions.filter(t => t.id !== id);
-                    } else { return; }
-                }
-            } else {
-                if (confirm("Deseja apagar este lançamento?")) {
-                    transactions = transactions.filter(t => t.id !== id);
-                }
-            }
-            localStorage.setItem('meu_app_financeiro_final', JSON.stringify(transactions));
-            updateUI();
+                if (confirm("Apagar TODOS os meses vinculados?")) { transactions = transactions.filter(t => t.groupId !== groupId); } 
+                else { if(confirm("Apagar APENAS este mês?")) { transactions = transactions.filter(t => t.id !== id); } else { return; } }
+            } else { if (confirm("Deseja apagar?")) { transactions = transactions.filter(t => t.id !== id); } else { return; } }
+            saveTransactionsToCloud();
         }
 
-        // 🧮 LÓGICA CORE DA CALCULADORA
+        // CALCULADORA
         const calcPopup = document.getElementById('calc-popup');
         const calcScreen = document.getElementById('calc-screen');
         let calcExpression = "";
-
-        function toggleCalc() {
-            calcPopup.style.display = calcPopup.style.display === 'block' ? 'none' : 'block';
-        }
-
-        function pressNum(num) {
-            if(calcExpression === "0" && num !== ".") calcExpression = "";
-            calcExpression += num;
-            calcScreen.value = calcExpression.replace('.', ',');
-        }
-
+        function toggleCalc() { calcPopup.style.display = calcPopup.style.display === 'block' ? 'none' : 'block'; }
+        function pressNum(num) { if(calcExpression === "0" && num !== ".") calcExpression = ""; calcExpression += num; calcScreen.value = calcExpression.replace('.', ','); }
         function pressOp(op) {
             if(calcExpression === "") return;
-            // Evita duplicar operadores seguidos
-            const lastChar = calcExpression.slice(-1);
-            if(['+','-','*','/'].includes(lastChar)) {
-                calcExpression = calcExpression.slice(0, -1);
-            }
-            calcExpression += op;
-            calcScreen.value = calcExpression;
+            if(['+','-','*','/'].includes(calcExpression.slice(-1))) { calcExpression = calcExpression.slice(0, -1); }
+            calcExpression += op; calcScreen.value = calcExpression;
         }
-
-        function clearCalc() {
-            calcExpression = "";
-            calcScreen.value = "0";
-        }
-
+        function clearCalc() { calcExpression = ""; calcScreen.value = "0"; }
         function calculateResult() {
             if(calcExpression === "") return;
             try {
-                // Executa a string matemática de forma segura
-                let result = eval(calcExpression);
-                // Arredonda para até 2 casas decimais
-                result = Math.round(result * 100) / 100;
-                calcScreen.value = result.toString().replace('.', ',');
-                calcExpression = result.toString();
-            } catch(err) {
-                calcScreen.value = "Erro";
-                calcExpression = "";
-            }
+                let result = eval(calcExpression); result = Math.round(result * 100) / 100;
+                calcScreen.value = result.toString().replace('.', ','); calcExpression = result.toString();
+            } catch(err) { calcScreen.value = "Erro"; calcExpression = ""; }
         }
 
-        // Inicialização global do App
-        buildInstallmentDropdown();
-        buildYearDropdowns();
-        syncFormDateSelectors();
-        handleTypeFieldsChange();
-        updateUI();
+        buildInstallmentDropdown(); buildYearDropdowns(); syncFormDateSelectors(); handleTypeFieldsChange(); loadTransactionsFromCloud();
     </script>
 </body>
 </html>
