@@ -671,7 +671,7 @@
 
         function buildInstallmentDropdown() {
             installmentsSelect.innerHTML = '';
-            for (let i = 1; i <= 24; i++) {
+            for (let i = 1; i <= 99; i++) {
                 let option = document.createElement('option'); option.value = i; option.text = i === 1 ? '1x (À vista)' : i + 'x'; installmentsSelect.appendChild(option);
             }
         }
