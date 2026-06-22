@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Finanças Pro</title>
-    <link class="apple-touch-icon" rel="apple-touch-icon" href="https://img.icons8.com/fluent/192/000000/wallet.png">
+    <link rel="apple-touch-icon" href="https://img.icons8.com/fluent/192/000000/wallet.png">
     <!-- Configurações para o arquivo rodar como APP nativo no celular (Esconde a barra do navegador) -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -154,41 +154,6 @@
         .card.saldo h3 { margin-bottom: 0; }
         .card.saldo .value { font-size: 1.3rem; }
 
-        /* ESTILOS PARA OS BOTÕES MANUAIS DE ZERAR */
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-        .card-header h3 {
-            margin: 0 !important;
-        }
-        .btn-manual-clear {
-            background: rgba(255, 255, 255, 0.08);
-            border: none;
-            color: #ffffff;
-            padding: 3px 6px;
-            border-radius: 6px;
-            font-size: 10px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 3px;
-            transition: all 0.2s;
-        }
-        .btn-manual-clear:hover {
-            background: rgba(255, 255, 255, 0.18);
-        }
-        .btn-manual-clear.btn-pago {
-            background: rgba(46, 213, 115, 0.15);
-            color: #2ed573;
-        }
-        .btn-manual-clear.btn-pago:hover {
-            background: rgba(46, 213, 115, 0.25);
-        }
-
         .form-section {
             background-color: var(--card-bg);
             padding: 16px;
@@ -331,14 +296,28 @@
         .transaction-info .details {
             font-size: 0.75rem;
             color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
+
+        /* ETIQUETAS DE STATUS PADO / NÃO PAGO */
+        .badge-status {
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .badge-status.not-paid { background-color: rgba(247, 90, 104, 0.15); color: var(--red); }
+        .badge-status.paid { background-color: rgba(0, 179, 126, 0.15); color: var(--green); }
 
         .transaction-amount {
             font-weight: 600;
             font-size: 0.95rem;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 6px;
         }
 
         .transaction-item.entrada .amount-val { color: var(--green); }
@@ -349,9 +328,11 @@
             background: none;
             border: none;
             font-size: 1rem;
-            padding: 6px;
+            padding: 4px;
             cursor: pointer;
+            transition: transform 0.1s;
         }
+        .action-btn:active { transform: scale(1.2); }
 
         .invoice-details-box {
             display: none;
@@ -460,24 +441,15 @@
 
         <section class="dashboard">
             <div class="card receitas">
-                <div class="card-header">
-                    <h3>Receitas</h3>
-                    <button type="button" class="btn-manual-clear" onclick="clearManualBalance('income')" title="Zerar Receitas">🔄 Zerar</button>
-                </div>
+                <h3>Receitas</h3>
                 <div class="value" id="balance-income">R$ 0</div>
             </div>
             <div class="card despesas">
-                <div class="card-header">
-                    <h3>Despesas</h3>
-                    <button type="button" class="btn-manual-clear btn-pago" onclick="clearManualBalance('expense')" title="Zerar Despesas">✅ Pago</button>
-                </div>
+                <h3>Despesas</h3>
                 <div class="value" id="balance-expense">R$ 0</div>
             </div>
             <div class="card cartao">
-                <div class="card-header">
-                    <h3>Cartões</h3>
-                    <button type="button" class="btn-manual-clear btn-pago" onclick="clearManualBalance('card')" title="Zerar Cartões">✅ Pago</button>
-                </div>
+                <h3>Cartões</h3>
                 <div class="value" id="balance-card">R$ 0</div>
             </div>
             <div class="card saldo">
@@ -630,18 +602,19 @@
         let transactions = [];
         let editingTransactionId = null;
 
-        // Controle para o estado manual de zerar os saldos
-        let manualClears = {
-            income: false,
-            expense: false,
-            card: false
-        };
+        // FUNÇÃO DE BAIXA MANUAL DIRETAMENTE NA PLANILHA (OPÇÃO 2)
+        function markAsPaidAndZero(id) {
+            const transaction = transactions.find(t => t.id === id);
+            if (!transaction) return;
 
-        function clearManualBalance(type) {
-            let msg = type === 'income' ? 'Deseja mesmo zerar o painel de Receitas?' : 'Marcar como pago e zerar o saldo deste bloco?';
-            if (confirm(msg)) {
-                manualClears[type] = true;
-                updateUI();
+            if (confirm(`Deseja marcar "${transaction.description}" como PAGO? O valor será zerado na planilha.`)) {
+                transactions = transactions.map(t => {
+                    if (t.id === id) {
+                        return { ...t, amount: 0 }; // Seta o valor real para 0 de vez!
+                    }
+                    return t;
+                });
+                saveTransactionsToCloud(); // Empurra a alteração definitiva para o Google Drive
             }
         }
 
@@ -730,7 +703,7 @@
 
         function buildInstallmentDropdown() {
             installmentsSelect.innerHTML = '';
-            for (let i = 1; i <= 99; i++) {
+            for (let i = 1; i <= 70; i++) {
                 let option = document.createElement('option'); option.value = i; option.text = i === 1 ? '1x (À vista)' : i + 'x'; installmentsSelect.appendChild(option);
             }
         }
@@ -752,8 +725,8 @@
             else { installmentsSelect.disabled = false; }
         });
 
-        document.getElementById('prev-month').addEventListener('click', () => { currentDate.setMonth(currentDate.getMonth() - 1); manualClears = { income: false, expense: false, card: false }; syncFormDateSelectors(); updateUI(); });
-        document.getElementById('next-month').addEventListener('click', () => { currentDate.setMonth(currentDate.getMonth() + 1); manualClears = { income: false, expense: false, card: false }; syncFormDateSelectors(); updateUI(); });
+        document.getElementById('prev-month').addEventListener('click', () => { currentDate.setMonth(currentDate.getMonth() - 1); syncFormDateSelectors(); updateUI(); });
+        document.getElementById('next-month').addEventListener('click', () => { currentDate.setMonth(currentDate.getMonth() + 1); syncFormDateSelectors(); updateUI(); });
 
         function formatCurrency(value) { return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
         function toggleInvoiceDetails(cardName) {
@@ -785,14 +758,24 @@
                 let detailsText = t.isFixed ? 'Fixo' : t.installmentText;
                 const formattedDay = t.day < 10 ? '0' + t.day : t.day;
 
+                // Lógica de Status dinâmica baseada no valor zerado
+                let statusBadge = '';
+                let checkButton = '';
+                if(t.type === 'saida') {
+                    const isPaid = t.amount === 0;
+                    statusBadge = isPaid ? `<span class="badge-status paid">Pago</span>` : `<span class="badge-status not-paid">Não Pago</span>`;
+                    checkButton = isPaid ? '' : `<button class="action-btn" onclick="markAsPaidAndZero(${t.id})" title="Marcar como Pago">✅</button>`;
+                }
+
                 li.innerHTML = `
                     <div class="item-main-row">
                         <div class="transaction-info">
                             <span class="desc">${t.description}</span>
-                            <span class="details">Dia ${formattedDay} • ${detailsText}</span>
+                            <span class="details">Dia ${formattedDay} • ${detailsText} ${statusBadge}</span>
                         </div>
                         <div class="transaction-amount">
                             <span class="amount-val">${formatCurrency(t.amount)}</span>
+                            ${checkButton}
                             <button class="action-btn" onclick="startEdit(${t.id})">✏️</button>
                             <button class="action-btn" onclick="deleteTransaction(${t.id}, '${t.groupId}')">❌</button>
                         </div>
@@ -817,14 +800,21 @@
 
                 let subItemsHtml = cardData.items.map(sub => {
                     const subDay = sub.day < 10 ? '0' + sub.day : sub.day;
+                    
+                    // Lógica de Status para compras individuais da fatura do Cartão
+                    const isPaid = sub.amount === 0;
+                    const cardStatusBadge = isPaid ? `<span class="badge-status paid">Pago</span>` : `<span class="badge-status not-paid">Não Pago</span>`;
+                    const cardCheckButton = isPaid ? '' : `<button class="action-btn" style="font-size:0.8rem;" onclick="markAsPaidAndZero(${sub.id})" title="Marcar como Pago">✅</button>`;
+
                     return `
                         <div class="invoice-subitem">
                             <div class="transaction-info">
                                 <span class="desc" style="font-size:0.85rem;">${sub.description}</span>
-                                <span class="details">Dia ${subDay} • ${sub.isFixed ? 'Fixo' : sub.installmentText}</span>
+                                <span class="details">Dia ${subDay} • ${sub.isFixed ? 'Fixo' : sub.installmentText} ${cardStatusBadge}</span>
                             </div>
                             <div class="transaction-amount" style="font-size:0.85rem;">
                                 <span>${formatCurrency(sub.amount)}</span>
+                                ${cardCheckButton}
                                 <button class="action-btn" style="font-size:0.8rem;" onclick="startEdit(${sub.id})">✏️</button>
                                 <button class="action-btn" style="font-size:0.8rem;" onclick="deleteTransaction(${sub.id}, '${sub.groupId}')">❌</button>
                             </div>
@@ -850,16 +840,10 @@
                 transactionList.appendChild(li);
             }
 
-            // Aplicando o modificador manual de zerar os saldos antes do cálculo final
-            let displayIncome = manualClears.income ? 0 : income;
-            let displayExpense = manualClears.expense ? 0 : expense;
-            let displayCard = manualClears.card ? 0 : cardValue;
-
-            const total = displayIncome - displayExpense - displayCard;
-            
-            balanceIncome.innerText = formatCurrency(displayIncome);
-            balanceExpense.innerText = formatCurrency(displayExpense);
-            balanceCard.innerText = formatCurrency(displayCard);
+            const total = income - expense - cardValue;
+            balanceIncome.innerText = formatCurrency(income);
+            balanceExpense.innerText = formatCurrency(expense);
+            balanceCard.innerText = formatCurrency(cardValue);
             balanceTotal.innerText = formatCurrency(total);
             balanceTotal.style.color = total >= 0 ? '#00b37e' : '#f75a68';
         }
@@ -898,7 +882,11 @@
             let cleanedAmount = amountInput.value.replace(',', '.');
             const fullAmount = parseFloat(cleanedAmount);
 
-            if (isNaN(fullAmount) || fullAmount <= 0) { alert("Valor inválido."); return; }
+            // Permite valor 0 apenas se estiver editando (caso queira zerar na mão via formulário)
+            if (isNaN(fullAmount) || (editingTransactionId === null && fullAmount <= 0) || (editingTransactionId !== null && fullAmount < 0)) { 
+                alert("Valor inválido."); 
+                return; 
+            }
 
             let finalCardName = "";
             if (typeSelect.value === 'credito') {
@@ -908,11 +896,6 @@
 
             let baseMonth = parseInt(targetMonthSelect.value);
             let baseYear = parseInt(targetYearSelect.value);
-
-            // Reseta os bloqueios manuais caso um novo lançamento ocorra no mesmo bloco
-            if (typeSelect.value === 'entrada') manualClears.income = false;
-            if (typeSelect.value === 'saida') manualClears.expense = false;
-            if (typeSelect.value === 'credito') manualClears.card = false;
 
             if (editingTransactionId !== null) {
                 transactions = transactions.map(t => {
