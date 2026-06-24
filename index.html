@@ -615,7 +615,6 @@
             }
         }
 
-        // NOVA FUNÇÃO: ZERAR FATURA INTEIRA DO CARTÃO NO MÊS ATUAL
         function markEntireCardAsPaid(cardName) {
             const targetMonth = currentDate.getMonth();
             const targetYear = currentDate.getFullYear();
@@ -632,10 +631,14 @@
             }
         }
 
+        // CARREGAMENTO SEGURO: Limpa antes de receber os dados frescos da nuvem
         async function loadTransactionsFromCloud() {
             try {
                 const response = await fetch(GOOGLE_SCRIPT_URL);
-                transactions = await response.json();
+                const data = await response.json();
+                if (Array.isArray(data)) {
+                    transactions = data; // Substitui completamente para evitar acúmulos na memória
+                }
                 setSyncBadge("Nuvem Conectada ✅", "#1c1c24", "#7c7c8a");
             } catch (err) {
                 setSyncBadge("Erro de Sincronia ⚠️", "#3a1e22", "#f75a68");
@@ -837,7 +840,6 @@
                     `;
                 }).join('');
 
-                // ADICIONADO: Botão ✅ no cabeçalho do cartão para liquidar a fatura inteira
                 const isEntireCardPaid = cardData.totalAmount === 0;
                 const topCheckButton = isEntireCardPaid ? '' : `<button class="action-btn" onclick="markEntireCardAsPaid('${cardName}')" title="Zerar Fatura Inteira">✅</button>`;
 
