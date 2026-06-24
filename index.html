@@ -64,7 +64,7 @@
             background-color: rgba(15, 15, 18, 0.8);
             display: flex; flex-direction: column; justify-content: center; align-items: center;
             z-index: 2000; color: #fff;
-            display: none; /* Inicialmente escondido para não travar o app à toa */
+            display: none;
         }
         .spinner {
             border: 3px solid rgba(255,255,255,0.1);
@@ -601,20 +601,34 @@
         let transactions = [];
         let editingTransactionId = null;
 
-        // MARCAR COMO PAGO E ZERAR (AGORA INSTANTÂNEO)
         function markAsPaidAndZero(id) {
             const transaction = transactions.find(t => t.id === id);
             if (!transaction) return;
 
             if (confirm(`Deseja marcar "${transaction.description}" como PAGO? O valor será zerado.`)) {
-                // Modifica instantaneamente no celular
                 transactions = transactions.map(t => {
                     if (t.id === id) return { ...t, amount: 0 };
                     return t;
                 });
-                
-                updateUI(); // Atualiza a tela NO MESMO SEGUNDO!
-                saveTransactionsToCloud(); // Sincroniza em background, sem travar a tela
+                updateUI();
+                saveTransactionsToCloud();
+            }
+        }
+
+        // NOVA FUNÇÃO: ZERAR FATURA INTEIRA DO CARTÃO NO MÊS ATUAL
+        function markEntireCardAsPaid(cardName) {
+            const targetMonth = currentDate.getMonth();
+            const targetYear = currentDate.getFullYear();
+
+            if (confirm(`Deseja marcar TODAS as compras do cartão "${cardName}" neste mês como PAGAS? Isso zerará o valor total da fatura.`)) {
+                transactions = transactions.map(t => {
+                    if (t.type === 'credito' && t.cardName === cardName && t.month === targetMonth && t.year === targetYear) {
+                        return { ...t, amount: 0 };
+                    }
+                    return t;
+                });
+                updateUI();
+                saveTransactionsToCloud();
             }
         }
 
@@ -629,7 +643,6 @@
             hideLoading(); updateUI();
         }
 
-        // SALVAMENTO SILENCIOSO (OTIMISTA)
         async function saveTransactionsToCloud() {
             setSyncBadge("Salvando na nuvem... ⏳", "#1a2c38", "#4ea8de");
             try {
@@ -824,6 +837,10 @@
                     `;
                 }).join('');
 
+                // ADICIONADO: Botão ✅ no cabeçalho do cartão para liquidar a fatura inteira
+                const isEntireCardPaid = cardData.totalAmount === 0;
+                const topCheckButton = isEntireCardPaid ? '' : `<button class="action-btn" onclick="markEntireCardAsPaid('${cardName}')" title="Zerar Fatura Inteira">✅</button>`;
+
                 li.innerHTML = `
                     <div class="item-main-row">
                         <div class="transaction-info">
@@ -832,6 +849,7 @@
                         </div>
                         <div class="transaction-amount">
                             <span class="amount-val">${formatCurrency(cardData.totalAmount)}</span>
+                            ${topCheckButton}
                             <button class="action-btn" onclick="toggleInvoiceDetails('${cardName}')">👁️</button>
                         </div>
                     </div>
@@ -943,9 +961,9 @@
                 transactions.push(item);
             }
 
-            updateUI(); // Atualiza na hora na tela
+            updateUI();
             form.reset(); cardFields.style.display = 'none'; handleTypeFieldsChange(); syncFormDateSelectors(); 
-            saveTransactionsToCloud(); // Salva em silêncio
+            saveTransactionsToCloud();
         });
 
         function deleteTransaction(id, groupId) {
@@ -955,11 +973,10 @@
                 else { if(confirm("Apagar APENAS este mês?")) { transactions = transactions.filter(t => t.id !== id); } else { return; } }
             } else { if (confirm("Deseja apagar?")) { transactions = transactions.filter(t => t.id !== id); } else { return; } }
             
-            updateUI(); // Deleta instantâneo da tela
+            updateUI();
             saveTransactionsToCloud();
         }
 
-        // CALCULADORA
         const calcPopup = document.getElementById('calc-popup');
         const calcScreen = document.getElementById('calc-screen');
         let calcExpression = "";
