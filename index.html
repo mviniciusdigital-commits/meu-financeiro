@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Finanças Pro</title>
     <link rel="apple-touch-icon" href="https://img.icons8.com/fluent/192/000000/wallet.png">
-    <!-- Configurações para o arquivo rodar como APP nativo no celular (Esconde a barra do navegador) -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
@@ -62,9 +61,10 @@
         .loading-overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
-            background-color: var(--bg-color);
+            background-color: rgba(15, 15, 18, 0.8);
             display: flex; flex-direction: column; justify-content: center; align-items: center;
             z-index: 2000; color: #fff;
+            display: none; /* Inicialmente escondido para não travar o app à toa */
         }
         .spinner {
             border: 3px solid rgba(255,255,255,0.1);
@@ -83,6 +83,7 @@
             border-radius: 20px;
             margin-top: 6px;
             border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
         }
 
         .month-navigation {
@@ -301,7 +302,6 @@
             gap: 6px;
         }
 
-        /* ETIQUETAS DE STATUS PADO / NÃO PAGO */
         .badge-status {
             padding: 1px 5px;
             border-radius: 4px;
@@ -422,7 +422,7 @@
 </head>
 <body>
 
-    <div id="loading-screen" class="loading-overlay">
+    <div id="loading-screen" class="loading-overlay" style="display: flex;">
         <div class="spinner"></div>
         <div id="loading-text" style="font-weight:500; font-size:0.95rem;">Carregando app...</div>
     </div>
@@ -558,7 +558,7 @@
             <button class="calc-btn" onclick="pressNum('4')">4</button>
             <button class="calc-btn" onclick="pressNum('5')">5</button>
             <button class="calc-btn" onclick="pressNum('6')">6</button>
-            <button class="calc-btn" onclick="pressNum('.')">,</button>
+            <button class="calc-btn operator" onclick="pressOp('.')">,</button>
             <button class="calc-btn" onclick="pressNum('1')">1</button>
             <button class="calc-btn" onclick="pressNum('2')">2</button>
             <button class="calc-btn" onclick="pressNum('3')">3</button>
@@ -568,7 +568,6 @@
     </div>
 
     <script>
-        // LINK GERADO DO SEU GOOGLE SCRIPT INJETADO DIRETAMENTE AQUI
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxk0W3IPE-yQRh-qA7pN_-wHkb6EMO61s8wrpFHCFIhXuRwUuR_xwlyaaaudP4tfEEv/exec";
 
         const form = document.getElementById('finance-form');
@@ -602,47 +601,53 @@
         let transactions = [];
         let editingTransactionId = null;
 
-        // FUNÇÃO DE BAIXA MANUAL DIRETAMENTE NA PLANILHA (OPÇÃO 2)
+        // MARCAR COMO PAGO E ZERAR (AGORA INSTANTÂNEO)
         function markAsPaidAndZero(id) {
             const transaction = transactions.find(t => t.id === id);
             if (!transaction) return;
 
-            if (confirm(`Deseja marcar "${transaction.description}" como PAGO? O valor será zerado na planilha.`)) {
+            if (confirm(`Deseja marcar "${transaction.description}" como PAGO? O valor será zerado.`)) {
+                // Modifica instantaneamente no celular
                 transactions = transactions.map(t => {
-                    if (t.id === id) {
-                        return { ...t, amount: 0 }; // Seta o valor real para 0 de vez!
-                    }
+                    if (t.id === id) return { ...t, amount: 0 };
                     return t;
                 });
-                saveTransactionsToCloud(); // Empurra a alteração definitiva para o Google Drive
+                
+                updateUI(); // Atualiza a tela NO MESMO SEGUNDO!
+                saveTransactionsToCloud(); // Sincroniza em background, sem travar a tela
             }
         }
 
         async function loadTransactionsFromCloud() {
-            showLoading("Buscando dados na nuvem...");
             try {
                 const response = await fetch(GOOGLE_SCRIPT_URL);
                 transactions = await response.json();
-                syncStatus.innerText = "Nuvem Conectada ✅";
+                setSyncBadge("Nuvem Conectada ✅", "#1c1c24", "#7c7c8a");
             } catch (err) {
-                syncStatus.innerText = "Erro ao carregar ⚠️";
+                setSyncBadge("Erro de Sincronia ⚠️", "#3a1e22", "#f75a68");
             }
             hideLoading(); updateUI();
         }
 
+        // SALVAMENTO SILENCIOSO (OTIMISTA)
         async function saveTransactionsToCloud() {
-            showLoading("Salvando registros...");
+            setSyncBadge("Salvando na nuvem... ⏳", "#1a2c38", "#4ea8de");
             try {
                 await fetch(GOOGLE_SCRIPT_URL, {
                     method: "POST", mode: "no-cors",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ action: "saveAll", transactions: transactions })
                 });
-                syncStatus.innerText = "Salvo na nuvem! ✅";
+                setSyncBadge("Sincronizado ✅", "#12241c", "#00b37e");
             } catch (err) {
-                alert("Erro de conexão.");
+                setSyncBadge("Erro ao salvar! ⚠️", "#3a1e22", "#f75a68");
             }
-            hideLoading(); updateUI();
+        }
+
+        function setSyncBadge(text, bgColor, textColor) {
+            syncStatus.innerText = text;
+            syncStatus.style.backgroundColor = bgColor;
+            syncStatus.style.color = textColor;
         }
 
         function showLoading(text) { document.getElementById('loading-text').innerText = text; loadingScreen.style.display = 'flex'; }
@@ -758,7 +763,6 @@
                 let detailsText = t.isFixed ? 'Fixo' : t.installmentText;
                 const formattedDay = t.day < 10 ? '0' + t.day : t.day;
 
-                // Lógica de Status dinâmica baseada no valor zerado
                 let statusBadge = '';
                 let checkButton = '';
                 if(t.type === 'saida') {
@@ -800,8 +804,6 @@
 
                 let subItemsHtml = cardData.items.map(sub => {
                     const subDay = sub.day < 10 ? '0' + sub.day : sub.day;
-                    
-                    // Lógica de Status para compras individuais da fatura do Cartão
                     const isPaid = sub.amount === 0;
                     const cardStatusBadge = isPaid ? `<span class="badge-status paid">Pago</span>` : `<span class="badge-status not-paid">Não Pago</span>`;
                     const cardCheckButton = isPaid ? '' : `<button class="action-btn" style="font-size:0.8rem;" onclick="markAsPaidAndZero(${sub.id})" title="Marcar como Pago">✅</button>`;
@@ -882,7 +884,6 @@
             let cleanedAmount = amountInput.value.replace(',', '.');
             const fullAmount = parseFloat(cleanedAmount);
 
-            // Permite valor 0 apenas se estiver editando (caso queira zerar na mão via formulário)
             if (isNaN(fullAmount) || (editingTransactionId === null && fullAmount <= 0) || (editingTransactionId !== null && fullAmount < 0)) { 
                 alert("Valor inválido."); 
                 return; 
@@ -906,7 +907,10 @@
                     }
                     return t;
                 });
-                cancelEdit(); saveTransactionsToCloud(); return;
+                updateUI();
+                cancelEdit(); 
+                saveTransactionsToCloud(); 
+                return;
             }
 
             const type = typeSelect.value;
@@ -939,7 +943,9 @@
                 transactions.push(item);
             }
 
-            form.reset(); cardFields.style.display = 'none'; handleTypeFieldsChange(); syncFormDateSelectors(); saveTransactionsToCloud();
+            updateUI(); // Atualiza na hora na tela
+            form.reset(); cardFields.style.display = 'none'; handleTypeFieldsChange(); syncFormDateSelectors(); 
+            saveTransactionsToCloud(); // Salva em silêncio
         });
 
         function deleteTransaction(id, groupId) {
@@ -948,6 +954,8 @@
                 if (confirm("Apagar TODOS os meses vinculados?")) { transactions = transactions.filter(t => t.groupId !== groupId); } 
                 else { if(confirm("Apagar APENAS este mês?")) { transactions = transactions.filter(t => t.id !== id); } else { return; } }
             } else { if (confirm("Deseja apagar?")) { transactions = transactions.filter(t => t.id !== id); } else { return; } }
+            
+            updateUI(); // Deleta instantâneo da tela
             saveTransactionsToCloud();
         }
 
