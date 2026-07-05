@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Finanças Pro</title>
+    <title>Finanças Pro - Ozzy Edition</title>
     <link rel="apple-touch-icon" href="https://img.icons8.com/fluent/192/000000/wallet.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -453,7 +453,7 @@
                 <div class="value" id="balance-card">R$ 0</div>
             </div>
             <div class="card saldo">
-                <h3>Saldo Total</h3>
+                <h3>Saldo Acumulado</h3>
                 <div class="value" id="balance-total">R$ 0</div>
             </div>
         </section>
@@ -504,7 +504,7 @@
                         </select>
                         <div class="checkbox-group" id="fixed-wrapper">
                             <input type="checkbox" id="is-fixed">
-                            <label for="is-fixed" id="fixed-label">Fixo</label>
+                            <label for="is-fixed" id="fixed-label">Fixo (Mensal)</label>
                         </div>
                     </div>
                     <div>
@@ -631,13 +631,18 @@
             }
         }
 
-        // CARREGAMENTO SEGURO: Limpa antes de receber os dados frescos da nuvem
         async function loadTransactionsFromCloud() {
             try {
                 const response = await fetch(GOOGLE_SCRIPT_URL);
                 const data = await response.json();
                 if (Array.isArray(data)) {
-                    transactions = data; // Substitui completamente para evitar acúmulos na memória
+                    // Limpeza contra duplicidade profunda na leitura inicial
+                    const seenIds = new Set();
+                    transactions = data.filter(item => {
+                        if (seenIds.has(item.id)) return false;
+                        seenIds.add(item.id);
+                        return true;
+                    });
                 }
                 setSyncBadge("Nuvem Conectada ✅", "#1c1c24", "#7c7c8a");
             } catch (err) {
@@ -672,7 +677,7 @@
         function buildYearDropdowns() {
             targetYearSelect.innerHTML = '';
             const currentYear = new Date().getFullYear();
-            for(let y = currentYear; y <= currentYear + 5; y++) {
+            for(let y = currentYear - 2; y <= currentYear + 5; y++) {
                 let opt = document.createElement('option'); opt.value = y; opt.text = y; targetYearSelect.appendChild(opt);
             }
         }
@@ -734,9 +739,12 @@
             if (currentType === 'credito') { cardFields.style.display = 'block'; updateCardListDropdown(); } 
             else { cardFields.style.display = 'none'; cardNameCustom.required = false; }
 
-            if (currentType === 'entrada') { fixedLabel.innerText = "Fixo"; fixedWrapper.style.display = 'flex'; } 
-            else if (currentType === 'saida') { fixedLabel.innerText = "Fixo"; fixedWrapper.style.display = 'flex'; } 
-            else { fixedLabel.innerText = "Fixo"; fixedWrapper.style.display = 'flex'; }
+            if (isFixedCheckbox.checked) {
+                installmentsSelect.value = "1";
+                installmentsSelect.disabled = true;
+            } else {
+                installmentsSelect.disabled = false;
+            }
         }
 
         typeSelect.addEventListener('change', handleTypeFieldsChange);
@@ -755,22 +763,79 @@
             if(element) { element.style.display = element.style.display === 'block' ? 'none' : 'block'; }
         }
 
+        // FUNÇÃO DE INTELIGÊNCIA TEMPORAL DE SALDOS E LANÇAMENTOS FIXOS
         function updateUI() {
             transactionList.innerHTML = ''; 
             const targetMonth = currentDate.getMonth();
             const targetYear = currentDate.getFullYear();
             monthDisplay.innerText = currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
-            let income = 0, expense = 0, cardValue = 0;
-            let currentMonthTransactions = transactions.filter(t => t.month === targetMonth && t.year === targetYear);
-            let normalItems = currentMonthTransactions.filter(t => t.type !== 'credito');
-            let cardItems = currentMonthTransactions.filter(t => t.type === 'credito');
+            // 1. CÁCULO DE SALDOS RETROATIVOS ACUMULADOS (DILUIÇÃO DE SALDOS)
+            let accumulatedBalance = 0;
+            
+            // Descobre o limite de tempo da base de dados histórica
+            let allYears = transactions.map(t => t.year).concat([targetYear]);
+            let minYear = Math.min(...allYears);
+            
+            // Loop matemático do início da história até o mês ANTERIOR ao atual
+            for (let y = minYear; y <= targetYear; y++) {
+                let mStart = (y === minYear) ? 0 : 0;
+                let mEnd = (y === targetYear) ? targetMonth - 1 : 11;
+                
+                for (let m = mStart; m <= mEnd; m++) {
+                    transactions.forEach(t => {
+                        // Lançamentos normais daquele mês específico do passado
+                        if (!t.isFixed && t.month === m && t.year === y) {
+                            if (t.type === 'entrada') accumulatedBalance += t.amount;
+                            if (t.type === 'saida') accumulatedBalance += t.amount; // Guardados com sinal nativo do form ou calculados no loop
+                            if (t.type === 'credito') accumulatedBalance -= t.amount;
+                        }
+                        // Lançamentos fixos se aplicam a meses passados se o mês for posterior à criação
+                        if (t.isFixed) {
+                            let itemCreationDate = new Date(t.year, t.month, 1);
+                            let currentLoopDate = new Date(y, m, 1);
+                            if (currentLoopDate >= itemCreationDate) {
+                                if (t.type === 'entrada') accumulatedBalance += t.amount;
+                                if (t.type === 'saida') accumulatedBalance -= t.amount;
+                                if (t.type === 'credito') accumulatedBalance -= t.amount;
+                            }
+                        }
+                    });
+                }
+            }
 
-            currentMonthTransactions.forEach(t => {
+            // 2. PROCESSAR O MÊS ATUAL VISUALIZADO
+            let income = 0, expense = 0, cardValue = 0;
+            let currentMonthVisibleTransactions = [];
+
+            transactions.forEach(t => {
+                if (!t.isFixed && t.month === targetMonth && t.year === targetYear) {
+                    currentMonthVisibleTransactions.push(t);
+                }
+                // Tratamento dinâmico para Lançamento Fixo (Aparecer SEMPRE nos meses seguintes)
+                if (t.isFixed) {
+                    let creationDate = new Date(t.year, t.month, 1);
+                    let viewDate = new Date(targetYear, targetMonth, 1);
+                    if (viewDate >= creationDate) {
+                        // Clona o item para exibição sem poluir o banco de dados principal
+                        currentMonthVisibleTransactions.push({
+                            ...t,
+                            day: t.day,
+                            month: targetMonth,
+                            year: targetYear
+                        });
+                    }
+                }
+            });
+
+            currentMonthVisibleTransactions.forEach(t => {
                 if (t.type === 'entrada') income += t.amount;
                 if (t.type === 'saida') expense += t.amount;
                 if (t.type === 'credito') cardValue += t.amount;
             });
+
+            let normalItems = currentMonthVisibleTransactions.filter(t => t.type !== 'credito');
+            let cardItems = currentMonthVisibleTransactions.filter(t => t.type === 'credito');
 
             normalItems.sort((a, b) => a.day - b.day);
             normalItems.forEach((t) => {
@@ -862,7 +927,8 @@
                 transactionList.appendChild(li);
             }
 
-            const total = income - expense - cardValue;
+            // O saldo final é a soma do histórico acumulado + o resultado líquido do mês atual
+            const total = accumulatedBalance + income - expense - cardValue;
             balanceIncome.innerText = formatCurrency(income);
             balanceExpense.innerText = formatCurrency(expense);
             balanceCard.innerText = formatCurrency(cardValue);
@@ -939,14 +1005,22 @@
             const groupId = 'g_' + Date.now();
 
             if (isFixed) {
-                for (let i = 0; i < 60; i++) {
-                    let fDate = new Date(baseYear, baseMonth + i, 1);
-                    let maxDays = new Date(fDate.getFullYear(), fDate.getMonth() + 1, 0).getDate();
-                    let safeDay = chosenDay > maxDays ? maxDays : chosenDay;
-                    let item = { id: Date.now() + i, groupId: groupId, day: safeDay, description: description, amount: fullAmount, type: type, isFixed: true, installmentText: 'Fixo', month: fDate.getMonth(), year: fDate.getFullYear() };
-                    if (type === 'credito') { item.cardName = finalCardName; item.cardBrand = cardBrandSelect.value; }
-                    transactions.push(item);
-                }
+                // Lançamento Fixo Inteligente: Salva APENAS 1 registro base. 
+                // A função updateUI se encarrega de projetá-lo nos meses seguintes.
+                let item = { 
+                    id: Date.now(), 
+                    groupId: groupId, 
+                    day: chosenDay, 
+                    description: description, 
+                    amount: fullAmount, 
+                    type: type, 
+                    isFixed: true, 
+                    installmentText: 'Fixo', 
+                    month: baseMonth, 
+                    year: baseYear 
+                };
+                if (type === 'credito') { item.cardName = finalCardName; item.cardBrand = cardBrandSelect.value; }
+                transactions.push(item);
             } else if (installments > 1) {
                 const partAmount = fullAmount / installments;
                 for (let i = 0; i < installments; i++) {
@@ -971,7 +1045,7 @@
         function deleteTransaction(id, groupId) {
             const complex = transactions.some(t => t.groupId === groupId && t.id !== id);
             if (complex) {
-                if (confirm("Apagar TODOS os meses vinculados?")) { transactions = transactions.filter(t => t.groupId !== groupId); } 
+                if (confirm("Apagar TODOS os meses vinculados (incluindo recorrências)?")) { transactions = transactions.filter(t => t.groupId !== groupId); } 
                 else { if(confirm("Apagar APENAS este mês?")) { transactions = transactions.filter(t => t.id !== id); } else { return; } }
             } else { if (confirm("Deseja apagar?")) { transactions = transactions.filter(t => t.id !== id); } else { return; } }
             
