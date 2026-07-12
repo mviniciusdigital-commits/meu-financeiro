@@ -418,6 +418,54 @@
         .calc-btn.operator { background-color: #343444; color: var(--blue); }
         .calc-btn.clear { background-color: var(--red); }
         .calc-btn.equal { background-color: var(--green); grid-column: span 2; }
+
+        /* ESTILOS DO POP-UP DE ESCOLHA DE EDIÇÃO */
+        .custom-modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(15, 15, 18, 0.85);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 3000; padding: 20px;
+            display: none;
+        }
+        .custom-modal {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 20px;
+            width: 100%;
+            max-width: 360px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+        }
+        .custom-modal h3 {
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+            color: #fff;
+        }
+        .custom-modal p {
+            font-size: 0.88rem;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+            line-height: 1.4;
+        }
+        .modal-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .modal-btn {
+            height: 44px;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            color: white;
+        }
+        .modal-btn.this-month { background-color: var(--blue); }
+        .modal-btn.all-months { background-color: var(--primary-btn); }
+        .modal-btn.cancel { background-color: #2e2e3a; color: var(--text-secondary); }
     </style>
 </head>
 <body>
@@ -425,6 +473,19 @@
     <div id="loading-screen" class="loading-overlay" style="display: flex;">
         <div class="spinner"></div>
         <div id="loading-text" style="font-weight:500; font-size:0.95rem;">Carregando app...</div>
+    </div>
+
+    <!-- POP-UP CUSTOMIZADO PARA EDIÇÃO DE LANÇAMENTOS FIXOS -->
+    <div id="edit-choice-modal" class="custom-modal-overlay">
+        <div class="custom-modal">
+            <h3>⚙️ Editar Lançamento Fixo</h3>
+            <p>Este é um registro recorrente. Como deseja aplicar as alterações de valor/descrição?</p>
+            <div class="modal-buttons">
+                <button class="modal-btn this-month" id="btn-edit-this-month">Alterar APENAS este mês</button>
+                <button class="modal-btn all-months" id="btn-edit-all-months">Alterar TODOS os meses</button>
+                <button class="modal-btn cancel" id="btn-edit-cancel">Cancelar</button>
+            </div>
+        </div>
     </div>
 
     <div class="container">
@@ -597,10 +658,17 @@
         const loadingScreen = document.getElementById('loading-screen');
         const syncStatus = document.getElementById('sync-status');
 
+        // Seletores do Modal de Escolha
+        const editChoiceModal = document.getElementById('edit-choice-modal');
+        const btnEditThisMonth = document.getElementById('btn-edit-this-month');
+        const btnEditAllMonths = document.getElementById('btn-edit-all-months');
+        const btnEditCancel = document.getElementById('btn-edit-cancel');
+
         let currentDate = new Date();
         let transactions = [];
         let editingTransactionId = null;
         let isEditingOnlyCurrentMonth = false;
+        let pendingTransactionToEdit = null;
 
         function markAsPaidAndZero(id) {
             const transaction = transactions.find(t => t.id === id);
@@ -763,16 +831,13 @@
             if(element) { element.style.display = element.style.display === 'block' ? 'none' : 'block'; }
         }
 
-        // FUNÇÃO DE INTELIGÊNCIA TEMPORAL DE SALDOS E LANÇAMENTOS FIXOS (CORRIGIDA)
         function updateUI() {
             transactionList.innerHTML = ''; 
             const targetMonth = currentDate.getMonth();
             const targetYear = currentDate.getFullYear();
             monthDisplay.innerText = currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
-            // 1. CÁCULO DE SALDOS RETROATIVOS ACUMULADOS (DILUIÇÃO DE SALDOS CORRETA)
             let accumulatedBalance = 0;
-            
             let allYears = transactions.map(t => t.year).concat([targetYear]);
             let minYear = Math.min(...allYears);
             
@@ -784,8 +849,8 @@
                     transactions.forEach(t => {
                         if (!t.isFixed && t.month === m && t.year === y) {
                             if (t.type === 'entrada') accumulatedBalance += t.amount;
-                            if (t.type === 'saida') accumulatedBalance -= t.amount; // CORRIGIDO: Agora subtrai despesas passadas!
-                            if (t.type === 'credito') accumulatedBalance -= t.amount; // CORRIGIDO: Agora subtrai cartões passados!
+                            if (t.type === 'saida') accumulatedBalance -= t.amount;
+                            if (t.type === 'credito') accumulatedBalance -= t.amount;
                         }
                         if (t.isFixed) {
                             let itemCreationDate = new Date(t.year, t.month, 1);
@@ -800,7 +865,6 @@
                 }
             }
 
-            // 2. PROCESSAR O MÊS ATUAL VISUALIZADO
             let income = 0, expense = 0, cardValue = 0;
             let currentMonthVisibleTransactions = [];
 
@@ -933,22 +997,40 @@
             const transaction = transactions.find(t => t.id === id);
             if (!transaction) return;
             
-            editingTransactionId = id;
-            isEditingOnlyCurrentMonth = false;
-
-            // Lógica Inteligente para Edição Desvinculada de Registro Fixo
             if (transaction.isFixed) {
-                const choice = confirm(`Você está editando um LANÇAMENTO FIXO.\n\nClique em OK para alterar APENAS o mês atual (${currentDate.toLocaleDateString('pt-BR', {month: 'long'})}).\n\nClique em CANCELAR para alterar a raiz (afetará todos os meses).`);
-                if (choice) {
-                    isEditingOnlyCurrentMonth = true;
-                }
+                // Se for um item fixo, abre o novo Modal Customizado
+                pendingTransactionToEdit = transaction;
+                editChoiceModal.style.display = 'flex';
+            } else {
+                // Se for lançamento comum, edita direto
+                executeFormPopulate(transaction, false);
             }
+        }
 
-            formTitle.innerText = "✏️ Editando Lançamento";
+        // Eventos dos botões do Modal customizado
+        btnEditThisMonth.addEventListener('click', () => {
+            editChoiceModal.style.display = 'none';
+            if (pendingTransactionToEdit) executeFormPopulate(pendingTransactionToEdit, true);
+        });
+
+        btnEditAllMonths.addEventListener('click', () => {
+            editChoiceModal.style.display = 'none';
+            if (pendingTransactionToEdit) executeFormPopulate(pendingTransactionToEdit, false);
+        });
+
+        btnEditCancel.addEventListener('click', () => {
+            editChoiceModal.style.display = 'none';
+            pendingTransactionToEdit = null;
+        });
+
+        function executeFormPopulate(transaction, editOnlyCurrent) {
+            editingTransactionId = transaction.id;
+            isEditingOnlyCurrentMonth = editOnlyCurrent;
+
+            formTitle.innerText = isEditingOnlyCurrentMonth ? "✏️ Editando Apenas Este Mês" : "✏️ Editando Todos os Meses";
             submitBtn.innerText = "Atualizar";
             cancelEditBtn.style.display = "block";
             
-            // Se for alterar apenas o mês atual, mantém a data de visualização do app
             if (isEditingOnlyCurrentMonth) {
                 targetMonthSelect.value = currentDate.getMonth();
                 targetYearSelect.value = currentDate.getFullYear();
@@ -973,6 +1055,7 @@
             fixedWrapper.style.display = 'none';
             installmentsSelect.parentElement.style.display = 'none';
             form.scrollIntoView({ behavior: 'smooth' });
+            pendingTransactionToEdit = null;
         }
 
         function cancelEdit() {
@@ -1012,22 +1095,14 @@
 
             if (editingTransactionId !== null) {
                 if (isEditingOnlyCurrentMonth) {
-                    // Transforma a exibição deste mês em um lançamento comum isolado
-                    // E altera a data de início da receita fixa original para o mês seguinte para não duplicar
                     transactions = transactions.map(t => {
                         if (t.id === editingTransactionId) {
-                            // Avança o início do fixo original para o mês subsequente
                             let nextMonthDate = new Date(baseYear, baseMonth + 1, 1);
-                            return { 
-                                ...t, 
-                                month: nextMonthDate.getMonth(), 
-                                year: nextMonthDate.getFullYear() 
-                            };
+                            return { ...t, month: nextMonthDate.getMonth(), year: nextMonthDate.getFullYear() };
                         }
                         return t;
                     });
 
-                    // Insere o lançamento editado como um item avulso exclusivo deste mês
                     let isolatedItem = {
                         id: Date.now(),
                         groupId: 'g_' + Date.now(),
@@ -1044,7 +1119,6 @@
                     transactions.push(isolatedItem);
 
                 } else {
-                    // Edição Raiz normal (padrão do sistema)
                     transactions = transactions.map(t => {
                         if (t.id === editingTransactionId) {
                             let updated = { ...t, day: chosenDay, month: baseMonth, year: baseYear, description: description, amount: fullAmount, type: typeSelect.value };
@@ -1067,18 +1141,7 @@
             const groupId = 'g_' + Date.now();
 
             if (isFixed) {
-                let item = { 
-                    id: Date.now(), 
-                    groupId: groupId, 
-                    day: chosenDay, 
-                    description: description, 
-                    amount: fullAmount, 
-                    type: type, 
-                    isFixed: true, 
-                    installmentText: 'Fixo', 
-                    month: baseMonth, 
-                    year: baseYear 
-                };
+                let item = { id: Date.now(), groupId: groupId, day: chosenDay, description: description, amount: fullAmount, type: type, isFixed: true, installmentText: 'Fixo', month: baseMonth, year: baseYear };
                 if (type === 'credito') { item.cardName = finalCardName; item.cardBrand = cardBrandSelect.value; }
                 transactions.push(item);
             } else if (installments > 1) {
