@@ -419,7 +419,6 @@
         .calc-btn.clear { background-color: var(--red); }
         .calc-btn.equal { background-color: var(--green); grid-column: span 2; }
 
-        /* ESTILOS DO POP-UP DE ESCOLHA DE EDIÇÃO */
         .custom-modal-overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -475,7 +474,6 @@
         <div id="loading-text" style="font-weight:500; font-size:0.95rem;">Carregando app...</div>
     </div>
 
-    <!-- POP-UP CUSTOMIZADO PARA EDIÇÃO DE LANÇAMENTOS FIXOS -->
     <div id="edit-choice-modal" class="custom-modal-overlay">
         <div class="custom-modal">
             <h3>⚙️ Editar Lançamento Fixo</h3>
@@ -658,7 +656,6 @@
         const loadingScreen = document.getElementById('loading-screen');
         const syncStatus = document.getElementById('sync-status');
 
-        // Seletores do Modal de Escolha
         const editChoiceModal = document.getElementById('edit-choice-modal');
         const btnEditThisMonth = document.getElementById('btn-edit-this-month');
         const btnEditAllMonths = document.getElementById('btn-edit-all-months');
@@ -670,15 +667,49 @@
         let isEditingOnlyCurrentMonth = false;
         let pendingTransactionToEdit = null;
 
+        // FUNÇÃO DE ZERAR CORRIGIDA (AGORA SEM AFETAR OUTROS MESES SE FOR FIXO)
         function markAsPaidAndZero(id) {
+            const currentViewMonth = currentDate.getMonth();
+            const currentViewYear = currentDate.getFullYear();
             const transaction = transactions.find(t => t.id === id);
             if (!transaction) return;
 
-            if (confirm(`Deseja marcar "${transaction.description}" como PAGO? O valor será zerado.`)) {
-                transactions = transactions.map(t => {
-                    if (t.id === id) return { ...t, amount: 0 };
-                    return t;
-                });
+            if (confirm(`Deseja marcar "${transaction.description}" como PAGO? O valor será zerado apenas neste mês.`)) {
+                if (transaction.isFixed) {
+                    // Empurra a recorrência do item original para o mês que vem
+                    let nextMonthDate = new Date(currentViewYear, currentViewMonth + 1, 1);
+                    transactions = transactions.map(t => {
+                        if (t.id === id) {
+                            return { ...t, month: nextMonthDate.getMonth(), year: nextMonthDate.getFullYear() };
+                        }
+                        return t;
+                    });
+
+                    // Cria uma cópia avulsa zerada (R$ 0) fixada exclusivamente no mês atual para fins de exibição
+                    let zeroedItem = {
+                        id: Date.now(),
+                        groupId: transaction.groupId,
+                        day: transaction.day,
+                        description: transaction.description,
+                        amount: 0, // zerado!
+                        type: transaction.type,
+                        isFixed: false, // vira avulso para travar neste mês
+                        installmentText: 'Pago (Fixo)',
+                        month: currentViewMonth,
+                        year: currentViewYear
+                    };
+                    if (transaction.type === 'credito') {
+                        zeroedItem.cardName = transaction.cardName;
+                        zeroedItem.cardBrand = transaction.cardBrand;
+                    }
+                    transactions.push(zeroedItem);
+                } else {
+                    // Itens normais ou parcelas continuam alterando o valor do próprio ID
+                    transactions = transactions.map(t => {
+                        if (t.id === id) return { ...t, amount: 0 };
+                        return t;
+                    });
+                }
                 updateUI();
                 saveTransactionsToCloud();
             }
@@ -688,13 +719,56 @@
             const targetMonth = currentDate.getMonth();
             const targetYear = currentDate.getFullYear();
 
-            if (confirm(`Deseja marcar TODAS as compras do cartão "${cardName}" neste mês como PAGAS? Isso zerará o valor total da fatura.`)) {
-                transactions = transactions.map(t => {
-                    if (t.type === 'credito' && t.cardName === cardName && t.month === targetMonth && t.year === targetYear) {
-                        return { ...t, amount: 0 };
+            if (confirm(`Deseja marcar TODAS as compras do cartão "${cardName}" neste mês como PAGAS?`)) {
+                // Filtra as compras visíveis desse cartão específicas deste mês
+                let itemsToProcess = [];
+                transactions.forEach(t => {
+                    if (t.type === 'credito' && t.cardName === cardName) {
+                        if (!t.isFixed && t.month === targetMonth && t.year === targetYear) {
+                            itemsToProcess.push(t);
+                        } else if (t.isFixed) {
+                            let creationDate = new Date(t.year, t.month, 1);
+                            let viewDate = new Date(targetYear, targetMonth, 1);
+                            if (viewDate >= creationDate) {
+                                itemsToProcess.push(t);
+                            }
+                        }
                     }
-                    return t;
                 });
+
+                // Zera um por um usando a nova lógica inteligente protetora de meses
+                itemsToProcess.forEach(item => {
+                    if (item.isFixed) {
+                        let nextMonthDate = new Date(targetYear, targetMonth + 1, 1);
+                        transactions = transactions.map(t => {
+                            if (t.id === item.id) {
+                                return { ...t, month: nextMonthDate.getMonth(), year: nextMonthDate.getFullYear() };
+                            }
+                            return t;
+                        });
+                        let zeroedItem = {
+                            id: Date.now() + Math.random(),
+                            groupId: item.groupId,
+                            day: item.day,
+                            description: item.description,
+                            amount: 0,
+                            type: 'credito',
+                            isFixed: false,
+                            installmentText: 'Pago (Fixo)',
+                            month: targetMonth,
+                            year: targetYear,
+                            cardName: item.cardName,
+                            cardBrand: item.cardBrand
+                        };
+                        transactions.push(zeroedItem);
+                    } else {
+                        transactions = transactions.map(t => {
+                            if (t.id === item.id) return { ...t, amount: 0 };
+                            return t;
+                        });
+                    }
+                });
+
                 updateUI();
                 saveTransactionsToCloud();
             }
@@ -826,6 +900,7 @@
         document.getElementById('next-month').addEventListener('click', () => { currentDate.setMonth(currentDate.getMonth() + 1); syncFormDateSelectors(); updateUI(); });
 
         function formatCurrency(value) { return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
+        
         function toggleInvoiceDetails(cardName) {
             const element = document.getElementById(`invoice-box-${cardName.replace(/\s+/g, '-')}`);
             if(element) { element.style.display = element.style.display === 'block' ? 'none' : 'block'; }
@@ -905,7 +980,7 @@
                 let statusBadge = '';
                 let checkButton = '';
                 if(t.type === 'saida') {
-                    const isPaid = t.amount === 0;
+                    const isPaid = (t.amount === 0 || t.installmentText === 'Pago (Fixo)');
                     statusBadge = isPaid ? `<span class="badge-status paid">Pago</span>` : `<span class="badge-status not-paid">Não Pago</span>`;
                     checkButton = isPaid ? '' : `<button class="action-btn" onclick="markAsPaidAndZero(${t.id})" title="Marcar como Pago">✅</button>`;
                 }
@@ -943,7 +1018,7 @@
 
                 let subItemsHtml = cardData.items.map(sub => {
                     const subDay = sub.day < 10 ? '0' + sub.day : sub.day;
-                    const isPaid = sub.amount === 0;
+                    const isPaid = (sub.amount === 0 || sub.installmentText === 'Pago (Fixo)');
                     const cardStatusBadge = isPaid ? `<span class="badge-status paid">Pago</span>` : `<span class="badge-status not-paid">Não Pago</span>`;
                     const cardCheckButton = isPaid ? '' : `<button class="action-btn" style="font-size:0.8rem;" onclick="markAsPaidAndZero(${sub.id})" title="Marcar como Pago">✅</button>`;
 
@@ -998,16 +1073,13 @@
             if (!transaction) return;
             
             if (transaction.isFixed) {
-                // Se for um item fixo, abre o novo Modal Customizado
                 pendingTransactionToEdit = transaction;
                 editChoiceModal.style.display = 'flex';
             } else {
-                // Se for lançamento comum, edita direto
                 executeFormPopulate(transaction, false);
             }
         }
 
-        // Eventos dos botões do Modal customizado
         btnEditThisMonth.addEventListener('click', () => {
             editChoiceModal.style.display = 'none';
             if (pendingTransactionToEdit) executeFormPopulate(pendingTransactionToEdit, true);
