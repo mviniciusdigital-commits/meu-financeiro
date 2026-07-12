@@ -600,6 +600,7 @@
         let currentDate = new Date();
         let transactions = [];
         let editingTransactionId = null;
+        let isEditingOnlyCurrentMonth = false;
 
         function markAsPaidAndZero(id) {
             const transaction = transactions.find(t => t.id === id);
@@ -636,7 +637,6 @@
                 const response = await fetch(GOOGLE_SCRIPT_URL);
                 const data = await response.json();
                 if (Array.isArray(data)) {
-                    // Limpeza contra duplicidade profunda na leitura inicial
                     const seenIds = new Set();
                     transactions = data.filter(item => {
                         if (seenIds.has(item.id)) return false;
@@ -763,34 +763,30 @@
             if(element) { element.style.display = element.style.display === 'block' ? 'none' : 'block'; }
         }
 
-        // FUNÇÃO DE INTELIGÊNCIA TEMPORAL DE SALDOS E LANÇAMENTOS FIXOS
+        // FUNÇÃO DE INTELIGÊNCIA TEMPORAL DE SALDOS E LANÇAMENTOS FIXOS (CORRIGIDA)
         function updateUI() {
             transactionList.innerHTML = ''; 
             const targetMonth = currentDate.getMonth();
             const targetYear = currentDate.getFullYear();
             monthDisplay.innerText = currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
-            // 1. CÁCULO DE SALDOS RETROATIVOS ACUMULADOS (DILUIÇÃO DE SALDOS)
+            // 1. CÁCULO DE SALDOS RETROATIVOS ACUMULADOS (DILUIÇÃO DE SALDOS CORRETA)
             let accumulatedBalance = 0;
             
-            // Descobre o limite de tempo da base de dados histórica
             let allYears = transactions.map(t => t.year).concat([targetYear]);
             let minYear = Math.min(...allYears);
             
-            // Loop matemático do início da história até o mês ANTERIOR ao atual
             for (let y = minYear; y <= targetYear; y++) {
-                let mStart = (y === minYear) ? 0 : 0;
+                let mStart = 0;
                 let mEnd = (y === targetYear) ? targetMonth - 1 : 11;
                 
                 for (let m = mStart; m <= mEnd; m++) {
                     transactions.forEach(t => {
-                        // Lançamentos normais daquele mês específico do passado
                         if (!t.isFixed && t.month === m && t.year === y) {
                             if (t.type === 'entrada') accumulatedBalance += t.amount;
-                            if (t.type === 'saida') accumulatedBalance += t.amount; // Guardados com sinal nativo do form ou calculados no loop
-                            if (t.type === 'credito') accumulatedBalance -= t.amount;
+                            if (t.type === 'saida') accumulatedBalance -= t.amount; // CORRIGIDO: Agora subtrai despesas passadas!
+                            if (t.type === 'credito') accumulatedBalance -= t.amount; // CORRIGIDO: Agora subtrai cartões passados!
                         }
-                        // Lançamentos fixos se aplicam a meses passados se o mês for posterior à criação
                         if (t.isFixed) {
                             let itemCreationDate = new Date(t.year, t.month, 1);
                             let currentLoopDate = new Date(y, m, 1);
@@ -812,12 +808,10 @@
                 if (!t.isFixed && t.month === targetMonth && t.year === targetYear) {
                     currentMonthVisibleTransactions.push(t);
                 }
-                // Tratamento dinâmico para Lançamento Fixo (Aparecer SEMPRE nos meses seguintes)
                 if (t.isFixed) {
                     let creationDate = new Date(t.year, t.month, 1);
                     let viewDate = new Date(targetYear, targetMonth, 1);
                     if (viewDate >= creationDate) {
-                        // Clona o item para exibição sem poluir o banco de dados principal
                         currentMonthVisibleTransactions.push({
                             ...t,
                             day: t.day,
@@ -927,7 +921,6 @@
                 transactionList.appendChild(li);
             }
 
-            // O saldo final é a soma do histórico acumulado + o resultado líquido do mês atual
             const total = accumulatedBalance + income - expense - cardValue;
             balanceIncome.innerText = formatCurrency(income);
             balanceExpense.innerText = formatCurrency(expense);
@@ -939,27 +932,60 @@
         function startEdit(id) {
             const transaction = transactions.find(t => t.id === id);
             if (!transaction) return;
+            
             editingTransactionId = id;
+            isEditingOnlyCurrentMonth = false;
+
+            // Lógica Inteligente para Edição Desvinculada de Registro Fixo
+            if (transaction.isFixed) {
+                const choice = confirm(`Você está editando um LANÇAMENTO FIXO.\n\nClique em OK para alterar APENAS o mês atual (${currentDate.toLocaleDateString('pt-BR', {month: 'long'})}).\n\nClique em CANCELAR para alterar a raiz (afetará todos os meses).`);
+                if (choice) {
+                    isEditingOnlyCurrentMonth = true;
+                }
+            }
+
             formTitle.innerText = "✏️ Editando Lançamento";
             submitBtn.innerText = "Atualizar";
             cancelEditBtn.style.display = "block";
-            targetMonthSelect.value = transaction.month;
-            targetYearSelect.value = transaction.year;
+            
+            // Se for alterar apenas o mês atual, mantém a data de visualização do app
+            if (isEditingOnlyCurrentMonth) {
+                targetMonthSelect.value = currentDate.getMonth();
+                targetYearSelect.value = currentDate.getFullYear();
+            } else {
+                targetMonthSelect.value = transaction.month;
+                targetYearSelect.value = transaction.year;
+            }
+            
             updateDaysDropdown();
             daySelect.value = transaction.day;
             descriptionInput.value = transaction.description;
             amountInput.value = transaction.amount.toFixed(2);
             typeSelect.value = transaction.type;
             handleTypeFieldsChange();
-            if (transaction.type === 'credito') { cardNameSelect.value = transaction.cardName; cardNameCustom.value = transaction.cardName; cardBrandSelect.value = transaction.cardBrand || 'Visa'; }
+            
+            if (transaction.type === 'credito') { 
+                cardNameSelect.value = transaction.cardName; 
+                cardNameCustom.value = transaction.cardName; 
+                cardBrandSelect.value = transaction.cardBrand || 'Visa'; 
+            }
+            
             fixedWrapper.style.display = 'none';
             installmentsSelect.parentElement.style.display = 'none';
             form.scrollIntoView({ behavior: 'smooth' });
         }
 
         function cancelEdit() {
-            editingTransactionId = null; formTitle.innerText = "Novo Lançamento"; submitBtn.innerText = "Salvar Registro"; cancelEditBtn.style.display = "none";
-            installmentsSelect.parentElement.style.display = 'block'; form.reset(); handleTypeFieldsChange(); syncFormDateSelectors();
+            editingTransactionId = null; 
+            isEditingOnlyCurrentMonth = false;
+            formTitle.innerText = "Novo Lançamento"; 
+            submitBtn.innerText = "Salvar Registro"; 
+            cancelEditBtn.style.display = "none";
+            installmentsSelect.parentElement.style.display = 'block'; 
+            fixedWrapper.style.display = 'flex';
+            form.reset(); 
+            handleTypeFieldsChange(); 
+            syncFormDateSelectors();
         }
         cancelEditBtn.addEventListener('click', cancelEdit);
 
@@ -985,14 +1011,50 @@
             let baseYear = parseInt(targetYearSelect.value);
 
             if (editingTransactionId !== null) {
-                transactions = transactions.map(t => {
-                    if (t.id === editingTransactionId) {
-                        let updated = { ...t, day: chosenDay, month: baseMonth, year: baseYear, description: description, amount: fullAmount, type: typeSelect.value };
-                        if (typeSelect.value === 'credito') { updated.cardName = finalCardName; updated.cardBrand = cardBrandSelect.value; }
-                        return updated;
-                    }
-                    return t;
-                });
+                if (isEditingOnlyCurrentMonth) {
+                    // Transforma a exibição deste mês em um lançamento comum isolado
+                    // E altera a data de início da receita fixa original para o mês seguinte para não duplicar
+                    transactions = transactions.map(t => {
+                        if (t.id === editingTransactionId) {
+                            // Avança o início do fixo original para o mês subsequente
+                            let nextMonthDate = new Date(baseYear, baseMonth + 1, 1);
+                            return { 
+                                ...t, 
+                                month: nextMonthDate.getMonth(), 
+                                year: nextMonthDate.getFullYear() 
+                            };
+                        }
+                        return t;
+                    });
+
+                    // Insere o lançamento editado como um item avulso exclusivo deste mês
+                    let isolatedItem = {
+                        id: Date.now(),
+                        groupId: 'g_' + Date.now(),
+                        day: chosenDay,
+                        description: description,
+                        amount: fullAmount,
+                        type: typeSelect.value,
+                        isFixed: false,
+                        installmentText: 'À vista (Ajustado)',
+                        month: baseMonth,
+                        year: baseYear
+                    };
+                    if (typeSelect.value === 'credito') { isolatedItem.cardName = finalCardName; isolatedItem.cardBrand = cardBrandSelect.value; }
+                    transactions.push(isolatedItem);
+
+                } else {
+                    // Edição Raiz normal (padrão do sistema)
+                    transactions = transactions.map(t => {
+                        if (t.id === editingTransactionId) {
+                            let updated = { ...t, day: chosenDay, month: baseMonth, year: baseYear, description: description, amount: fullAmount, type: typeSelect.value };
+                            if (typeSelect.value === 'credito') { updated.cardName = finalCardName; updated.cardBrand = cardBrandSelect.value; }
+                            return updated;
+                        }
+                        return t;
+                    });
+                }
+                
                 updateUI();
                 cancelEdit(); 
                 saveTransactionsToCloud(); 
@@ -1005,8 +1067,6 @@
             const groupId = 'g_' + Date.now();
 
             if (isFixed) {
-                // Lançamento Fixo Inteligente: Salva APENAS 1 registro base. 
-                // A função updateUI se encarrega de projetá-lo nos meses seguintes.
                 let item = { 
                     id: Date.now(), 
                     groupId: groupId, 
