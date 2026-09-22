@@ -480,7 +480,7 @@
             <p>Este é um registro recorrente. Como deseja aplicar as alterações de valor/descrição?</p>
             <div class="modal-buttons">
                 <button class="modal-btn this-month" id="btn-edit-this-month">Alterar APENAS este mês</button>
-                <button class="modal-btn all-months" id="btn-edit-all-months">Alterar TODOS os meses</button>
+                <button class="modal-btn all-months" id="btn-edit-all-months">Alterar deste mês em diante</button>
                 <button class="modal-btn cancel" id="btn-edit-cancel">Cancelar</button>
             </div>
         </div>
@@ -667,7 +667,6 @@
         let isEditingOnlyCurrentMonth = false;
         let pendingTransactionToEdit = null;
 
-        // FUNÇÃO DE ZERAR CORRIGIDA (AGORA SEM AFETAR OUTROS MESES SE FOR FIXO)
         function markAsPaidAndZero(id) {
             const currentViewMonth = currentDate.getMonth();
             const currentViewYear = currentDate.getFullYear();
@@ -676,7 +675,6 @@
 
             if (confirm(`Deseja marcar "${transaction.description}" como PAGO? O valor será zerado apenas neste mês.`)) {
                 if (transaction.isFixed) {
-                    // Empurra a recorrência do item original para o mês que vem
                     let nextMonthDate = new Date(currentViewYear, currentViewMonth + 1, 1);
                     transactions = transactions.map(t => {
                         if (t.id === id) {
@@ -685,15 +683,14 @@
                         return t;
                     });
 
-                    // Cria uma cópia avulsa zerada (R$ 0) fixada exclusivamente no mês atual para fins de exibição
                     let zeroedItem = {
                         id: Date.now(),
                         groupId: transaction.groupId,
                         day: transaction.day,
                         description: transaction.description,
-                        amount: 0, // zerado!
+                        amount: 0,
                         type: transaction.type,
-                        isFixed: false, // vira avulso para travar neste mês
+                        isFixed: false,
                         installmentText: 'Pago (Fixo)',
                         month: currentViewMonth,
                         year: currentViewYear
@@ -704,7 +701,6 @@
                     }
                     transactions.push(zeroedItem);
                 } else {
-                    // Itens normais ou parcelas continuam alterando o valor do próprio ID
                     transactions = transactions.map(t => {
                         if (t.id === id) return { ...t, amount: 0 };
                         return t;
@@ -720,7 +716,6 @@
             const targetYear = currentDate.getFullYear();
 
             if (confirm(`Deseja marcar TODAS as compras do cartão "${cardName}" neste mês como PAGAS?`)) {
-                // Filtra as compras visíveis desse cartão específicas deste mês
                 let itemsToProcess = [];
                 transactions.forEach(t => {
                     if (t.type === 'credito' && t.cardName === cardName) {
@@ -729,14 +724,14 @@
                         } else if (t.isFixed) {
                             let creationDate = new Date(t.year, t.month, 1);
                             let viewDate = new Date(targetYear, targetMonth, 1);
-                            if (viewDate >= creationDate) {
+                            let endDate = t.endYear ? new Date(t.endYear, t.endMonth, 1) : null;
+                            if (viewDate >= creationDate && (!endDate || viewDate <= endDate)) {
                                 itemsToProcess.push(t);
                             }
                         }
                     }
                 });
 
-                // Zera um por um usando a nova lógica inteligente protetora de meses
                 itemsToProcess.forEach(item => {
                     if (item.isFixed) {
                         let nextMonthDate = new Date(targetYear, targetMonth + 1, 1);
@@ -930,7 +925,8 @@
                         if (t.isFixed) {
                             let itemCreationDate = new Date(t.year, t.month, 1);
                             let currentLoopDate = new Date(y, m, 1);
-                            if (currentLoopDate >= itemCreationDate) {
+                            let endDate = t.endYear ? new Date(t.endYear, t.endMonth, 1) : null;
+                            if (currentLoopDate >= itemCreationDate && (!endDate || currentLoopDate <= endDate)) {
                                 if (t.type === 'entrada') accumulatedBalance += t.amount;
                                 if (t.type === 'saida') accumulatedBalance -= t.amount;
                                 if (t.type === 'credito') accumulatedBalance -= t.amount;
@@ -950,7 +946,8 @@
                 if (t.isFixed) {
                     let creationDate = new Date(t.year, t.month, 1);
                     let viewDate = new Date(targetYear, targetMonth, 1);
-                    if (viewDate >= creationDate) {
+                    let endDate = t.endYear ? new Date(t.endYear, t.endMonth, 1) : null;
+                    if (viewDate >= creationDate && (!endDate || viewDate <= endDate)) {
                         currentMonthVisibleTransactions.push({
                             ...t,
                             day: t.day,
@@ -1099,17 +1096,12 @@
             editingTransactionId = transaction.id;
             isEditingOnlyCurrentMonth = editOnlyCurrent;
 
-            formTitle.innerText = isEditingOnlyCurrentMonth ? "✏️ Editando Apenas Este Mês" : "✏️ Editando Todos os Meses";
+            formTitle.innerText = isEditingOnlyCurrentMonth ? "✏️ Editando Apenas Este Mês" : "✏️ Editando Deste Mês em Diante";
             submitBtn.innerText = "Atualizar";
             cancelEditBtn.style.display = "block";
             
-            if (isEditingOnlyCurrentMonth) {
-                targetMonthSelect.value = currentDate.getMonth();
-                targetYearSelect.value = currentDate.getFullYear();
-            } else {
-                targetMonthSelect.value = transaction.month;
-                targetYearSelect.value = transaction.year;
-            }
+            targetMonthSelect.value = currentDate.getMonth();
+            targetYearSelect.value = currentDate.getFullYear();
             
             updateDaysDropdown();
             daySelect.value = transaction.day;
@@ -1166,31 +1158,67 @@
             let baseYear = parseInt(targetYearSelect.value);
 
             if (editingTransactionId !== null) {
-                if (isEditingOnlyCurrentMonth) {
-                    transactions = transactions.map(t => {
-                        if (t.id === editingTransactionId) {
-                            let nextMonthDate = new Date(baseYear, baseMonth + 1, 1);
-                            return { ...t, month: nextMonthDate.getMonth(), year: nextMonthDate.getFullYear() };
-                        }
-                        return t;
-                    });
+                const existingItem = transactions.find(t => t.id === editingTransactionId);
 
-                    let isolatedItem = {
-                        id: Date.now(),
-                        groupId: 'g_' + Date.now(),
-                        day: chosenDay,
-                        description: description,
-                        amount: fullAmount,
-                        type: typeSelect.value,
-                        isFixed: false,
-                        installmentText: 'À vista (Ajustado)',
-                        month: baseMonth,
-                        year: baseYear
-                    };
-                    if (typeSelect.value === 'credito') { isolatedItem.cardName = finalCardName; isolatedItem.cardBrand = cardBrandSelect.value; }
-                    transactions.push(isolatedItem);
+                if (existingItem && existingItem.isFixed) {
+                    if (isEditingOnlyCurrentMonth) {
+                        // Empurra o fixo original para o mês que vem
+                        let nextMonthDate = new Date(baseYear, baseMonth + 1, 1);
+                        transactions = transactions.map(t => {
+                            if (t.id === editingTransactionId) {
+                                return { ...t, month: nextMonthDate.getMonth(), year: nextMonthDate.getFullYear() };
+                            }
+                            return t;
+                        });
 
+                        // Cria o ajuste pontual para o mês atual
+                        let isolatedItem = {
+                            id: Date.now(),
+                            groupId: 'g_' + Date.now(),
+                            day: chosenDay,
+                            description: description,
+                            amount: fullAmount,
+                            type: typeSelect.value,
+                            isFixed: false,
+                            installmentText: 'À vista (Ajustado)',
+                            month: baseMonth,
+                            year: baseYear
+                        };
+                        if (typeSelect.value === 'credito') { isolatedItem.cardName = finalCardName; isolatedItem.cardBrand = cardBrandSelect.value; }
+                        transactions.push(isolatedItem);
+
+                    } else {
+                        // EDITAR DESTE MÊS EM DIANTE
+                        // 1. Encerra o lançamento antigo no mês anterior ao selecionado
+                        let prevDate = new Date(baseYear, baseMonth - 1, 1);
+                        let prevMonth = prevDate.getMonth();
+                        let prevYear = prevDate.getFullYear();
+
+                        transactions = transactions.map(t => {
+                            if (t.id === editingTransactionId) {
+                                return { ...t, endMonth: prevMonth, endYear: prevYear };
+                            }
+                            return t;
+                        });
+
+                        // 2. Cria um novo lançamento fixo a partir deste mês
+                        let newFixedItem = {
+                            id: Date.now(),
+                            groupId: 'g_' + Date.now(),
+                            day: chosenDay,
+                            description: description,
+                            amount: fullAmount,
+                            type: typeSelect.value,
+                            isFixed: true,
+                            installmentText: 'Fixo',
+                            month: baseMonth,
+                            year: baseYear
+                        };
+                        if (typeSelect.value === 'credito') { newFixedItem.cardName = finalCardName; newFixedItem.cardBrand = cardBrandSelect.value; }
+                        transactions.push(newFixedItem);
+                    }
                 } else {
+                    // Edição normal de itens avulsos/parcelados
                     transactions = transactions.map(t => {
                         if (t.id === editingTransactionId) {
                             let updated = { ...t, day: chosenDay, month: baseMonth, year: baseYear, description: description, amount: fullAmount, type: typeSelect.value };
