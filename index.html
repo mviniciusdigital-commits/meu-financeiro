@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Finanças Pro - Ozzy Edition (Reset & Fix)</title>
+    <title>Finanças Pro - Ozzy Edition</title>
     <link rel="apple-touch-icon" href="https://img.icons8.com/fluent/192/000000/wallet.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -246,7 +246,6 @@
         }
 
         button[type="submit"]:hover { background-color: var(--primary-btn-hover); }
-        #cancel-edit-btn { background-color: #32323e; width: auto; padding: 0 16px; border-radius: 10px; color: var(--text-color); border: none; }
 
         .history-section {
             background-color: var(--card-bg);
@@ -303,16 +302,6 @@
             gap: 6px;
         }
 
-        .badge-status {
-            padding: 1px 5px;
-            border-radius: 4px;
-            font-size: 9px;
-            font-weight: 700;
-            text-transform: uppercase;
-        }
-        .badge-status.not-paid { background-color: rgba(247, 90, 104, 0.15); color: var(--red); }
-        .badge-status.paid { background-color: rgba(0, 179, 126, 0.15); color: var(--green); }
-
         .transaction-amount {
             font-weight: 600;
             font-size: 0.95rem;
@@ -331,9 +320,7 @@
             font-size: 1rem;
             padding: 4px;
             cursor: pointer;
-            transition: transform 0.1s;
         }
-        .action-btn:active { transform: scale(1.2); }
 
         .invoice-details-box {
             display: none;
@@ -349,7 +336,7 @@
             justify-content: space-between;
             align-items: center;
             font-size: 0.85rem;
-            padding: 10px 0;
+            padding: 8px 0;
             border-bottom: 1px solid #1c1c24;
         }
         .invoice-subitem:last-child { border-bottom: none; }
@@ -439,32 +426,6 @@
         .calc-btn.operator { background-color: #343444; color: var(--blue); }
         .calc-btn.clear { background-color: var(--red); }
         .calc-btn.equal { background-color: var(--green); grid-column: span 2; }
-
-        .custom-modal-overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(15, 15, 18, 0.85);
-            display: flex; justify-content: center; align-items: center;
-            z-index: 3000; padding: 20px;
-            display: none;
-        }
-        .custom-modal {
-            background-color: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            padding: 20px;
-            width: 100%;
-            max-width: 360px;
-            text-align: center;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-        }
-        .custom-modal h3 { font-size: 1.1rem; margin-bottom: 10px; color: #fff; }
-        .custom-modal p { font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.4; }
-        .modal-buttons { display: flex; flex-direction: column; gap: 10px; }
-        .modal-btn { height: 44px; border: none; border-radius: 10px; font-size: 0.95rem; font-weight: 600; cursor: pointer; color: white; }
-        .modal-btn.this-month { background-color: var(--blue); }
-        .modal-btn.all-months { background-color: var(--primary-btn); }
-        .modal-btn.cancel { background-color: #2e2e3a; color: var(--text-secondary); }
     </style>
 </head>
 <body>
@@ -472,18 +433,6 @@
     <div id="loading-screen" class="loading-overlay" style="display: flex;">
         <div class="spinner"></div>
         <div id="loading-text" style="font-weight:500; font-size:0.95rem;">Carregando app...</div>
-    </div>
-
-    <div id="edit-choice-modal" class="custom-modal-overlay">
-        <div class="custom-modal">
-            <h3>⚙️ Editar Lançamento Fixo</h3>
-            <p>Este é um registro recorrente. Como deseja aplicar as alterações?</p>
-            <div class="modal-buttons">
-                <button class="modal-btn this-month" id="btn-edit-this-month">Alterar APENAS este mês</button>
-                <button class="modal-btn all-months" id="btn-edit-all-months">Alterar deste mês em diante</button>
-                <button class="modal-btn cancel" id="btn-edit-cancel">Cancelar</button>
-            </div>
-        </div>
     </div>
 
     <div class="container">
@@ -591,7 +540,6 @@
 
                 <div class="btn-container">
                     <button type="submit" id="submit-btn">Salvar Registro</button>
-                    <button type="button" id="cancel-edit-btn" style="display: none;">X</button>
                 </div>
             </form>
         </section>
@@ -635,9 +583,6 @@
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxk0W3IPE-yQRh-qA7pN_-wHkb6EMO61s8wrpFHCFIhXuRwUuR_xwlyaaaudP4tfEEv/exec";
 
         const form = document.getElementById('finance-form');
-        const formTitle = document.getElementById('form-title');
-        const submitBtn = document.getElementById('submit-btn');
-        const cancelEditBtn = document.getElementById('cancel-edit-btn');
         const daySelect = document.getElementById('day-select');
         const targetMonthSelect = document.getElementById('target-month-select');
         const targetYearSelect = document.getElementById('target-year-select');
@@ -646,7 +591,6 @@
         const typeSelect = document.getElementById('type');
         const installmentsSelect = document.getElementById('installments');
         const isFixedCheckbox = document.getElementById('is-fixed');
-        const fixedWrapper = document.getElementById('fixed-wrapper');
         const cardFields = document.getElementById('card-fields');
         const cardNameSelect = document.getElementById('card-name-select');
         const cardNameCustom = document.getElementById('card-name-custom');
@@ -663,7 +607,6 @@
         let currentDate = new Date();
         let transactions = [];
         let savedCardNames = new Set();
-        let isOperationLocked = false;
 
         function generateUniqueId() {
             if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
@@ -768,12 +711,15 @@
             }
         }
 
-        function getVisibleTransactionsForMonth(month, year) {
-            return transactions.filter(t => t.month === month && t.year === year);
-        }
-
         function formatCurrency(val) {
             return Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+
+        function toggleInvoiceDetails(cardId) {
+            const el = document.getElementById(cardId);
+            if (el) {
+                el.style.display = (el.style.display === 'block') ? 'none' : 'block';
+            }
         }
 
         function updateUI() {
@@ -783,33 +729,101 @@
             const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
             monthDisplay.innerText = `${monthNames[m]} de ${y}`;
 
-            const monthItems = getVisibleTransactionsForMonth(m, y);
+            const monthItems = transactions.filter(t => t.month === m && t.year === y);
 
             let income = 0;
             let expense = 0;
-            let card = 0;
+            let totalCardAmount = 0;
 
             transactionList.innerHTML = '';
 
+            // 1. Renderiza Receitas e Despesas Comuns
             monthItems.forEach(item => {
                 if (item.type === 'entrada') income += item.amount;
                 if (item.type === 'saida') expense += item.amount;
-                if (item.type === 'credito') card += item.amount;
 
-                if (item.amount === 0 && item.description === 'Cartão Cadastrado') return;
+                if (item.type === 'entrada' || item.type === 'saida') {
+                    const li = document.createElement('li');
+                    li.className = `transaction-item ${item.type}`;
+                    li.innerHTML = `
+                        <div class="item-main-row">
+                            <div class="transaction-info">
+                                <span class="desc">${item.description}</span>
+                                <span class="details">Dia ${item.day} • ${item.installmentText || ''}</span>
+                            </div>
+                            <div class="transaction-amount">
+                                <span class="amount-val">${formatCurrency(item.amount)}</span>
+                                <button class="action-btn" onclick="deleteTransaction('${item.id}')">🗑️</button>
+                            </div>
+                        </div>
+                    `;
+                    transactionList.appendChild(li);
+                }
+            });
+
+            // 2. Agrupa e Renderiza Faturas de Cartão de Crédito Separadamente por Cartão
+            const creditItems = monthItems.filter(t => t.type === 'credito');
+            const groupedCards = {};
+
+            creditItems.forEach(item => {
+                const cName = item.cardName || 'Cartão Principal';
+                if (!groupedCards[cName]) {
+                    groupedCards[cName] = { items: [], total: 0 };
+                }
+                if (item.amount > 0) {
+                    groupedCards[cName].items.push(item);
+                    groupedCards[cName].total += item.amount;
+                    totalCardAmount += item.amount;
+                }
+            });
+
+            // Adiciona cartões cadastrados mesmo que sem compras no mês atual
+            savedCardNames.forEach(cardName => {
+                if (!groupedCards[cardName]) {
+                    groupedCards[cardName] = { items: [], total: 0 };
+                }
+            });
+
+            Object.keys(groupedCards).forEach((cardName, index) => {
+                const cardGroup = groupedCards[cardName];
+                const boxId = `card-box-${index}`;
 
                 const li = document.createElement('li');
-                li.className = `transaction-item ${item.type}`;
+                li.className = 'transaction-item credito';
+
+                let subitemsHTML = '';
+                if (cardGroup.items.length === 0) {
+                    subitemsHTML = `<div style="font-size:0.8rem; color:var(--text-secondary); padding: 6px 0;">Nenhum lançamento nesta fatura.</div>`;
+                } else {
+                    cardGroup.items.forEach(subItem => {
+                        subitemsHTML += `
+                            <div class="invoice-subitem">
+                                <div>
+                                    <strong>${subItem.description}</strong>
+                                    <div style="font-size:0.7rem; color:var(--text-secondary);">Dia ${subItem.day} • Parcela ${subItem.installmentText}</div>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <span>${formatCurrency(subItem.amount)}</span>
+                                    <button class="action-btn" onclick="deleteTransaction('${subItem.id}')">🗑️</button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+
                 li.innerHTML = `
-                    <div class="item-main-row">
+                    <div class="item-main-row" onclick="toggleInvoiceDetails('${boxId}')" style="cursor:pointer;">
                         <div class="transaction-info">
-                            <span class="desc">${item.description}</span>
-                            <span class="details">Dia ${item.day} • ${item.installmentText || ''}</span>
+                            <span class="desc">💳 ${cardName}</span>
+                            <span class="details">${cardGroup.items.length} item(ns) na fatura • Ver detalhes</span>
                         </div>
                         <div class="transaction-amount">
-                            <span class="amount-val">${formatCurrency(item.amount)}</span>
-                            <button class="action-btn" onclick="deleteTransaction('${item.id}')">🗑️</button>
+                            <span class="amount-val">${formatCurrency(cardGroup.total)}</span>
+                            <span style="font-size:0.8rem; margin-left:4px;">▼</span>
                         </div>
+                    </div>
+                    <div class="invoice-details-box" id="${boxId}">
+                        ${subitemsHTML}
                     </div>
                 `;
                 transactionList.appendChild(li);
@@ -817,8 +831,8 @@
 
             balanceIncome.innerText = formatCurrency(income);
             balanceExpense.innerText = formatCurrency(expense);
-            balanceCard.innerText = formatCurrency(card);
-            balanceTotal.innerText = formatCurrency(income - expense - card);
+            balanceCard.innerText = formatCurrency(totalCardAmount);
+            balanceTotal.innerText = formatCurrency(income - expense - totalCardAmount);
         }
 
         async function deleteTransaction(id) {
