@@ -246,6 +246,7 @@
         }
 
         button[type="submit"]:hover { background-color: var(--primary-btn-hover); }
+        #cancel-edit-btn { background-color: #32323e; width: 46px; border-radius: 10px; color: var(--text-color); border: none; font-weight: bold; cursor: pointer; }
 
         .history-section {
             background-color: var(--card-bg);
@@ -426,6 +427,32 @@
         .calc-btn.operator { background-color: #343444; color: var(--blue); }
         .calc-btn.clear { background-color: var(--red); }
         .calc-btn.equal { background-color: var(--green); grid-column: span 2; }
+
+        .custom-modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(15, 15, 18, 0.85);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 3000; padding: 20px;
+            display: none;
+        }
+        .custom-modal {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 20px;
+            width: 100%;
+            max-width: 360px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+        }
+        .custom-modal h3 { font-size: 1.1rem; margin-bottom: 10px; color: #fff; }
+        .custom-modal p { font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.4; }
+        .modal-buttons { display: flex; flex-direction: column; gap: 10px; }
+        .modal-btn { height: 44px; border: none; border-radius: 10px; font-size: 0.95rem; font-weight: 600; cursor: pointer; color: white; }
+        .modal-btn.this-month { background-color: var(--blue); }
+        .modal-btn.all-months { background-color: var(--primary-btn); }
+        .modal-btn.cancel { background-color: #2e2e3a; color: var(--text-secondary); }
     </style>
 </head>
 <body>
@@ -433,6 +460,18 @@
     <div id="loading-screen" class="loading-overlay" style="display: flex;">
         <div class="spinner"></div>
         <div id="loading-text" style="font-weight:500; font-size:0.95rem;">Carregando app...</div>
+    </div>
+
+    <div id="edit-choice-modal" class="custom-modal-overlay">
+        <div class="custom-modal">
+            <h3>⚙️ Editar Lançamento Fixo</h3>
+            <p>Este é um registro recorrente. Como deseja aplicar as alterações?</p>
+            <div class="modal-buttons">
+                <button class="modal-btn this-month" id="btn-edit-this-month">Alterar APENAS este mês</button>
+                <button class="modal-btn all-months" id="btn-edit-all-months">Alterar deste mês em diante</button>
+                <button class="modal-btn cancel" id="btn-edit-cancel">Cancelar</button>
+            </div>
+        </div>
     </div>
 
     <div class="container">
@@ -540,6 +579,7 @@
 
                 <div class="btn-container">
                     <button type="submit" id="submit-btn">Salvar Registro</button>
+                    <button type="button" id="cancel-edit-btn" style="display: none;">X</button>
                 </div>
             </form>
         </section>
@@ -583,6 +623,9 @@
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxk0W3IPE-yQRh-qA7pN_-wHkb6EMO61s8wrpFHCFIhXuRwUuR_xwlyaaaudP4tfEEv/exec";
 
         const form = document.getElementById('finance-form');
+        const formTitle = document.getElementById('form-title');
+        const submitBtn = document.getElementById('submit-btn');
+        const cancelEditBtn = document.getElementById('cancel-edit-btn');
         const daySelect = document.getElementById('day-select');
         const targetMonthSelect = document.getElementById('target-month-select');
         const targetYearSelect = document.getElementById('target-year-select');
@@ -603,10 +646,12 @@
         const monthDisplay = document.getElementById('current-month-display');
         const loadingScreen = document.getElementById('loading-screen');
         const syncStatus = document.getElementById('sync-status');
+        const editChoiceModal = document.getElementById('edit-choice-modal');
 
         let currentDate = new Date();
         let transactions = [];
         let savedCardNames = new Set();
+        let editingTransactionId = null;
 
         function generateUniqueId() {
             if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
@@ -737,7 +782,7 @@
 
             transactionList.innerHTML = '';
 
-            // 1. Renderiza Receitas e Despesas Comuns
+            // 1. Receitas e Despesas Comuns
             monthItems.forEach(item => {
                 if (item.type === 'entrada') income += item.amount;
                 if (item.type === 'saida') expense += item.amount;
@@ -753,6 +798,7 @@
                             </div>
                             <div class="transaction-amount">
                                 <span class="amount-val">${formatCurrency(item.amount)}</span>
+                                <button class="action-btn" onclick="editTransaction('${item.id}')">✏️</button>
                                 <button class="action-btn" onclick="deleteTransaction('${item.id}')">🗑️</button>
                             </div>
                         </div>
@@ -761,7 +807,7 @@
                 }
             });
 
-            // 2. Agrupa e Renderiza Faturas de Cartão de Crédito Separadamente por Cartão
+            // 2. Faturas de Cartão de Crédito Agrupadas
             const creditItems = monthItems.filter(t => t.type === 'credito');
             const groupedCards = {};
 
@@ -777,7 +823,6 @@
                 }
             });
 
-            // Adiciona cartões cadastrados mesmo que sem compras no mês atual
             savedCardNames.forEach(cardName => {
                 if (!groupedCards[cardName]) {
                     groupedCards[cardName] = { items: [], total: 0 };
@@ -802,8 +847,9 @@
                                     <strong>${subItem.description}</strong>
                                     <div style="font-size:0.7rem; color:var(--text-secondary);">Dia ${subItem.day} • Parcela ${subItem.installmentText}</div>
                                 </div>
-                                <div style="display:flex; align-items:center; gap:8px;">
+                                <div style="display:flex; align-items:center; gap:6px;">
                                     <span>${formatCurrency(subItem.amount)}</span>
+                                    <button class="action-btn" onclick="editTransaction('${subItem.id}')">✏️</button>
                                     <button class="action-btn" onclick="deleteTransaction('${subItem.id}')">🗑️</button>
                                 </div>
                             </div>
@@ -815,7 +861,7 @@
                     <div class="item-main-row" onclick="toggleInvoiceDetails('${boxId}')" style="cursor:pointer;">
                         <div class="transaction-info">
                             <span class="desc">💳 ${cardName}</span>
-                            <span class="details">${cardGroup.items.length} item(ns) na fatura • Ver detalhes</span>
+                            <span class="details">${cardGroup.items.length} item(ns) na fatura • Toque para ver</span>
                         </div>
                         <div class="transaction-amount">
                             <span class="amount-val">${formatCurrency(cardGroup.total)}</span>
@@ -834,6 +880,47 @@
             balanceCard.innerText = formatCurrency(totalCardAmount);
             balanceTotal.innerText = formatCurrency(income - expense - totalCardAmount);
         }
+
+        function editTransaction(id) {
+            const item = transactions.find(t => t.id === id);
+            if (!item) return;
+
+            editingTransactionId = id;
+            formTitle.innerText = "Editar Lançamento";
+            submitBtn.innerText = "Atualizar Registro";
+            cancelEditBtn.style.display = "block";
+
+            daySelect.value = item.day;
+            targetMonthSelect.value = item.month;
+            targetYearSelect.value = item.year;
+            descriptionInput.value = item.description;
+            amountInput.value = item.amount;
+            typeSelect.value = item.type;
+            isFixedCheckbox.checked = item.isFixed;
+
+            if (item.type === 'credito') {
+                cardFields.style.display = 'block';
+                cardNameSelect.value = item.cardName;
+                cardBrandSelect.value = item.cardBrand;
+            } else {
+                cardFields.style.display = 'none';
+            }
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function resetForm() {
+            editingTransactionId = null;
+            formTitle.innerText = "Novo Lançamento";
+            submitBtn.innerText = "Salvar Registro";
+            cancelEditBtn.style.display = "none";
+            descriptionInput.value = '';
+            amountInput.value = '';
+            isFixedCheckbox.checked = false;
+            cardFields.style.display = 'none';
+        }
+
+        cancelEditBtn.addEventListener('click', resetForm);
 
         async function deleteTransaction(id) {
             if (confirm("Deseja realmente apagar este lançamento?")) {
@@ -902,50 +989,59 @@
                 if (cardName) savedCardNames.add(cardName);
             }
 
-            if (installments > 1 && type === 'credito') {
-                const installmentAmount = amount / installments;
-                const groupId = generateUniqueId();
+            if (editingTransactionId) {
+                const index = transactions.findIndex(t => t.id === editingTransactionId);
+                if (index !== -1) {
+                    transactions[index] = {
+                        ...transactions[index],
+                        day, month, year, description, amount, type, isFixed,
+                        cardName, cardBrand
+                    };
+                }
+                resetForm();
+            } else {
+                if (installments > 1 && type === 'credito') {
+                    const installmentAmount = amount / installments;
+                    const groupId = generateUniqueId();
 
-                for (let i = 0; i < installments; i++) {
-                    let calcMonth = (month + i) % 12;
-                    let calcYear = year + Math.floor((month + i) / 12);
+                    for (let i = 0; i < installments; i++) {
+                        let calcMonth = (month + i) % 12;
+                        let calcYear = year + Math.floor((month + i) / 12);
 
+                        transactions.push({
+                            id: generateUniqueId(),
+                            groupId: groupId,
+                            day: day,
+                            description: description,
+                            amount: installmentAmount,
+                            type: type,
+                            isFixed: false,
+                            installmentText: `${i + 1}/${installments}`,
+                            month: calcMonth,
+                            year: calcYear,
+                            cardName: cardName,
+                            cardBrand: cardBrand
+                        });
+                    }
+                } else {
                     transactions.push({
                         id: generateUniqueId(),
-                        groupId: groupId,
+                        groupId: generateUniqueId(),
                         day: day,
                         description: description,
-                        amount: installmentAmount,
+                        amount: amount,
                         type: type,
-                        isFixed: false,
-                        installmentText: `${i + 1}/${installments}`,
-                        month: calcMonth,
-                        year: calcYear,
+                        isFixed: isFixed,
+                        installmentText: isFixed ? 'Fixo' : 'À vista',
+                        month: month,
+                        year: year,
                         cardName: cardName,
                         cardBrand: cardBrand
                     });
                 }
-            } else {
-                transactions.push({
-                    id: generateUniqueId(),
-                    groupId: generateUniqueId(),
-                    day: day,
-                    description: description,
-                    amount: amount,
-                    type: type,
-                    isFixed: isFixed,
-                    installmentText: isFixed ? 'Fixo' : 'À vista',
-                    month: month,
-                    year: year,
-                    cardName: cardName,
-                    cardBrand: cardBrand
-                });
             }
 
-            descriptionInput.value = '';
-            amountInput.value = '';
-            isFixedCheckbox.checked = false;
-
+            resetForm();
             updateCardSelectOptions();
             updateUI();
             await saveTransactionsToCloud();
