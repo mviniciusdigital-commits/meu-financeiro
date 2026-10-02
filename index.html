@@ -661,7 +661,7 @@
         let savedCardNames = new Set();
         let editingTransactionId = null;
         let pendingAction = null;
-        let editScope = 'this-month'; // Guarda se a edição atual afeta 'this-month' ou 'all-months'
+        let editScope = 'this-month';
 
         function generateUniqueId() {
             if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
@@ -1086,6 +1086,7 @@
                     if (editScope === 'all-months' && currentItem.groupId) {
                         const targetSeq = currentItem.year * 12 + currentItem.month;
 
+                        // ATUALIZAÇÃO EM LOTE PARA TODOS OS MESES SEGUINTES
                         transactions.forEach(t => {
                             if (t.groupId === currentItem.groupId) {
                                 const seq = t.year * 12 + t.month;
@@ -1103,13 +1104,17 @@
                             }
                         });
                     } else {
-                        const index = transactions.findIndex(t => t.id === editingTransactionId);
-                        if (index !== -1) {
-                            transactions[index] = {
-                                ...transactions[index],
-                                day, month, year, description, amount, type, isFixed,
-                                cardName, cardBrand
-                            };
+                        // ATUALIZAÇÃO APENAS DO MÊS VIGENTE
+                        currentItem.day = day;
+                        currentItem.month = month;
+                        currentItem.year = year;
+                        currentItem.description = description;
+                        currentItem.amount = amount;
+                        currentItem.type = type;
+                        currentItem.isFixed = isFixed;
+                        if (type === 'credito') {
+                            currentItem.cardName = cardName;
+                            currentItem.cardBrand = cardBrand;
                         }
                     }
                 }
