@@ -142,7 +142,7 @@
 
         .card.receitas .value { color: var(--green); }
         .card.despesas .value { color: var(--red); }
-        .card.cartao .value { color: var(--blue); }
+        .card.cartao .value { color: var(--red); } /* MUDADO PARA VERMELHO */
         
         .card.saldo {
             grid-column: span 2;
@@ -154,6 +154,8 @@
         }
         .card.saldo h3 { margin-bottom: 0; }
         .card.saldo .value { font-size: 1.3rem; }
+        .card.saldo .value.positivo { color: var(--blue); }
+        .card.saldo .value.negativo { color: var(--red); }
 
         .form-section {
             background-color: var(--card-bg);
@@ -462,14 +464,14 @@
         <div id="loading-text" style="font-weight:500; font-size:0.95rem;">Carregando app...</div>
     </div>
 
-    <div id="edit-choice-modal" class="custom-modal-overlay">
+    <div id="action-choice-modal" class="custom-modal-overlay">
         <div class="custom-modal">
-            <h3>⚙️ Editar Lançamento Fixo</h3>
-            <p>Este é um registro recorrente. Como deseja aplicar as alterações?</p>
+            <h3 id="modal-title">⚙️ Lançamento Recorrente</h3>
+            <p id="modal-desc">Como deseja aplicar esta ação?</p>
             <div class="modal-buttons">
-                <button class="modal-btn this-month" id="btn-edit-this-month">Alterar APENAS este mês</button>
-                <button class="modal-btn all-months" id="btn-edit-all-months">Alterar deste mês em diante</button>
-                <button class="modal-btn cancel" id="btn-edit-cancel">Cancelar</button>
+                <button class="modal-btn this-month" id="btn-action-this-month">Apenas este mês</button>
+                <button class="modal-btn all-months" id="btn-action-all-months">Deste mês em diante</button>
+                <button class="modal-btn cancel" id="btn-action-cancel">Cancelar</button>
             </div>
         </div>
     </div>
@@ -500,7 +502,7 @@
                 <div class="value" id="balance-card">R$ 0,00</div>
             </div>
             <div class="card saldo">
-                <h3>Saldo Acumulado</h3>
+                <h3>Saldo Acumulado do Mês</h3>
                 <div class="value" id="balance-total">R$ 0,00</div>
             </div>
         </section>
@@ -646,12 +648,19 @@
         const monthDisplay = document.getElementById('current-month-display');
         const loadingScreen = document.getElementById('loading-screen');
         const syncStatus = document.getElementById('sync-status');
-        const editChoiceModal = document.getElementById('edit-choice-modal');
+        
+        const actionChoiceModal = document.getElementById('action-choice-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalDesc = document.getElementById('modal-desc');
+        const btnActionThisMonth = document.getElementById('btn-action-this-month');
+        const btnActionAllMonths = document.getElementById('btn-action-all-months');
+        const btnActionCancel = document.getElementById('btn-action-cancel');
 
         let currentDate = new Date();
         let transactions = [];
         let savedCardNames = new Set();
         let editingTransactionId = null;
+        let pendingAction = null;
 
         function generateUniqueId() {
             if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
@@ -689,7 +698,7 @@
 
             targetYearSelect.innerHTML = '';
             const currentYear = currentDate.getFullYear();
-            for (let y = currentYear - 2; y <= currentYear + 5; y++) {
+            for (let y = currentYear - 2; y <= currentYear + 10; y++) {
                 targetYearSelect.innerHTML += `<option value="${y}">${y}</option>`;
             }
             targetYearSelect.value = currentYear;
@@ -798,8 +807,8 @@
                             </div>
                             <div class="transaction-amount">
                                 <span class="amount-val">${formatCurrency(item.amount)}</span>
-                                <button class="action-btn" onclick="editTransaction('${item.id}')">✏️</button>
-                                <button class="action-btn" onclick="deleteTransaction('${item.id}')">🗑️</button>
+                                <button class="action-btn" onclick="handleEditClick('${item.id}')">✏️</button>
+                                <button class="action-btn" onclick="handleDeleteClick('${item.id}')">🗑️</button>
                             </div>
                         </div>
                     `;
@@ -849,8 +858,8 @@
                                 </div>
                                 <div style="display:flex; align-items:center; gap:6px;">
                                     <span>${formatCurrency(subItem.amount)}</span>
-                                    <button class="action-btn" onclick="editTransaction('${subItem.id}')">✏️</button>
-                                    <button class="action-btn" onclick="deleteTransaction('${subItem.id}')">🗑️</button>
+                                    <button class="action-btn" onclick="handleEditClick('${subItem.id}')">✏️</button>
+                                    <button class="action-btn" onclick="handleDeleteClick('${subItem.id}')">🗑️</button>
                                 </div>
                             </div>
                         `;
@@ -875,13 +884,73 @@
                 transactionList.appendChild(li);
             });
 
+            const totalBalance = income - expense - totalCardAmount;
+
             balanceIncome.innerText = formatCurrency(income);
             balanceExpense.innerText = formatCurrency(expense);
             balanceCard.innerText = formatCurrency(totalCardAmount);
-            balanceTotal.innerText = formatCurrency(income - expense - totalCardAmount);
+            balanceTotal.innerText = formatCurrency(totalBalance);
+
+            // Ajuste dinâmico da cor do saldo acumulado do mês
+            if (totalBalance >= 0) {
+                balanceTotal.className = "value positivo";
+            } else {
+                balanceTotal.className = "value negativo";
+            }
         }
 
-        function editTransaction(id) {
+        function handleEditClick(id) {
+            const item = transactions.find(t => t.id === id);
+            if (!item) return;
+
+            if (item.isFixed || (item.groupId && transactions.filter(t => t.groupId === item.groupId).length > 1)) {
+                pendingAction = { type: 'edit', id: id };
+                modalTitle.innerText = "✏️ Editar Lançamento Recorrente";
+                modalDesc.innerText = "Este item se repete em outros meses. Como prefere editar?";
+                actionChoiceModal.style.display = 'flex';
+            } else {
+                executeEdit(id);
+            }
+        }
+
+        function handleDeleteClick(id) {
+            const item = transactions.find(t => t.id === id);
+            if (!item) return;
+
+            if (item.isFixed || (item.groupId && transactions.filter(t => t.groupId === item.groupId).length > 1)) {
+                pendingAction = { type: 'delete', id: id };
+                modalTitle.innerText = "🗑️ Excluir Lançamento Recorrente";
+                modalDesc.innerText = "Este item se repete em outros meses. Como prefere excluir?";
+                actionChoiceModal.style.display = 'flex';
+            } else {
+                if (confirm("Deseja realmente apagar este lançamento?")) {
+                    executeDelete(id, 'this-month');
+                }
+            }
+        }
+
+        btnActionThisMonth.addEventListener('click', () => {
+            if (!pendingAction) return;
+            actionChoiceModal.style.display = 'none';
+            if (pendingAction.type === 'edit') executeEdit(pendingAction.id);
+            if (pendingAction.type === 'delete') executeDelete(pendingAction.id, 'this-month');
+            pendingAction = null;
+        });
+
+        btnActionAllMonths.addEventListener('click', () => {
+            if (!pendingAction) return;
+            actionChoiceModal.style.display = 'none';
+            if (pendingAction.type === 'edit') executeEdit(pendingAction.id);
+            if (pendingAction.type === 'delete') executeDelete(pendingAction.id, 'all-months');
+            pendingAction = null;
+        });
+
+        btnActionCancel.addEventListener('click', () => {
+            actionChoiceModal.style.display = 'none';
+            pendingAction = null;
+        });
+
+        function executeEdit(id) {
             const item = transactions.find(t => t.id === id);
             if (!item) return;
 
@@ -909,6 +978,27 @@
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
+        async function executeDelete(id, scope) {
+            const item = transactions.find(t => t.id === id);
+            if (!item) return;
+
+            if (scope === 'all-months' && item.groupId) {
+                const currentSeq = item.year * 12 + item.month;
+                transactions = transactions.filter(t => {
+                    if (t.groupId === item.groupId) {
+                        const seq = t.year * 12 + t.month;
+                        return seq < currentSeq;
+                    }
+                    return true;
+                });
+            } else {
+                transactions = transactions.filter(t => t.id !== id);
+            }
+
+            updateUI();
+            await saveTransactionsToCloud();
+        }
+
         function resetForm() {
             editingTransactionId = null;
             formTitle.innerText = "Novo Lançamento";
@@ -921,14 +1011,6 @@
         }
 
         cancelEditBtn.addEventListener('click', resetForm);
-
-        async function deleteTransaction(id) {
-            if (confirm("Deseja realmente apagar este lançamento?")) {
-                transactions = transactions.filter(t => t.id !== id);
-                updateUI();
-                await saveTransactionsToCloud();
-            }
-        }
 
         async function resetAllTransactions() {
             if (confirm("ATENÇÃO: Deseja zerar a planilha para recomeçar todos os lançamentos do zero?")) {
@@ -1000,9 +1082,32 @@
                 }
                 resetForm();
             } else {
-                if (installments > 1 && type === 'credito') {
+                const groupId = generateUniqueId();
+
+                if (isFixed) {
+                    // GERAR PROJEÇÃO DE 5 ANOS (60 MESES) PARA ITENS FIXOS
+                    for (let i = 0; i < 60; i++) {
+                        let calcMonth = (month + i) % 12;
+                        let calcYear = year + Math.floor((month + i) / 12);
+
+                        transactions.push({
+                            id: generateUniqueId(),
+                            groupId: groupId,
+                            day: day,
+                            description: description,
+                            amount: amount,
+                            type: type,
+                            isFixed: true,
+                            installmentText: 'Fixo',
+                            month: calcMonth,
+                            year: calcYear,
+                            cardName: cardName,
+                            cardBrand: cardBrand
+                        });
+                    }
+                } else if (installments > 1 && type === 'credito') {
+                    // GERAR PARCELAMENTO DE CARTÃO
                     const installmentAmount = amount / installments;
-                    const groupId = generateUniqueId();
 
                     for (let i = 0; i < installments; i++) {
                         let calcMonth = (month + i) % 12;
@@ -1024,15 +1129,16 @@
                         });
                     }
                 } else {
+                    // LANÇAMENTO Á VISTA / ÚNICO
                     transactions.push({
                         id: generateUniqueId(),
-                        groupId: generateUniqueId(),
+                        groupId: groupId,
                         day: day,
                         description: description,
                         amount: amount,
                         type: type,
-                        isFixed: isFixed,
-                        installmentText: isFixed ? 'Fixo' : 'À vista',
+                        isFixed: false,
+                        installmentText: 'À vista',
                         month: month,
                         year: year,
                         cardName: cardName,
