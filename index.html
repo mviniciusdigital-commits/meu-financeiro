@@ -344,26 +344,6 @@
         }
         .invoice-subitem:last-child { border-bottom: none; }
 
-        .reset-section {
-            background-color: #1a1215;
-            padding: 16px;
-            border-radius: 16px;
-            border: 1px solid #3a1e22;
-            text-align: center;
-        }
-
-        .reset-btn {
-            background-color: #a82e3b;
-            color: white;
-            border: none;
-            height: 44px;
-            padding: 0 16px;
-            border-radius: 10px;
-            font-weight: 600;
-            cursor: pointer;
-            width: 100%;
-        }
-
         .calc-toggle-btn {
             position: fixed;
             bottom: 20px;
@@ -590,11 +570,6 @@
             <h2>Extrato Mensal</h2>
             <ul class="transaction-list" id="transaction-list"></ul>
         </section>
-
-        <section class="reset-section">
-            <button class="reset-btn" onclick="resetAllTransactions()">🗑️ Resetar Todos os Lançamentos</button>
-            <p style="font-size:0.75rem; color:var(--text-secondary); margin-top:8px;">Atenção: Isso apaga todos os lançamentos para você recomeçar do zero. Seus cartões cadastrados serão mantidos.</p>
-        </section>
     </div>
 
     <button class="calc-toggle-btn" onclick="toggleCalc()">🧮</button>
@@ -737,12 +712,19 @@
                     transactions.forEach(t => {
                         if (t.cardName) savedCardNames.add(t.cardName);
                     });
+                    
+                    localStorage.setItem('local_finances_backup', JSON.stringify(transactions));
                     updateCardSelectOptions();
                     updateUI();
                     updateSyncStatus('success');
                 }
             } catch (err) {
                 console.error("Erro ao carregar dados:", err);
+                const backup = localStorage.getItem('local_finances_backup');
+                if (backup) {
+                    transactions = JSON.parse(backup);
+                    updateUI();
+                }
                 updateSyncStatus('error');
             } finally {
                 hideLoading();
@@ -751,17 +733,19 @@
 
         async function saveTransactionsToCloud() {
             updateSyncStatus('syncing');
+            localStorage.setItem('local_finances_backup', JSON.stringify(transactions));
             try {
-                const payload = JSON.stringify(transactions);
+                const payload = new URLSearchParams();
+                payload.append('data', JSON.stringify(transactions));
+
                 await fetch(GOOGLE_SCRIPT_URL, {
                     method: 'POST',
-                    mode: 'no-cors',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: payload
                 });
                 updateSyncStatus('success');
             } catch (err) {
-                console.error("Erro ao salvar:", err);
+                console.error("Erro ao salvar na nuvem:", err);
                 updateSyncStatus('error');
             }
         }
@@ -792,7 +776,6 @@
 
             transactionList.innerHTML = '';
 
-            // 1. Receitas e Despesas Comuns
             monthItems.forEach(item => {
                 if (item.type === 'entrada') income += item.amount;
                 if (item.type === 'saida') expense += item.amount;
@@ -817,7 +800,6 @@
                 }
             });
 
-            // 2. Faturas de Cartão de Crédito Agrupadas
             const creditItems = monthItems.filter(t => t.type === 'credito');
             const groupedCards = {};
 
@@ -1020,37 +1002,6 @@
 
         cancelEditBtn.addEventListener('click', resetForm);
 
-        async function resetAllTransactions() {
-            if (confirm("ATENÇÃO: Deseja zerar a planilha para recomeçar todos os lançamentos do zero?")) {
-                showLoading("Zerando planilha...");
-                
-                let cardsToKeep = Array.from(savedCardNames);
-                transactions = [];
-
-                cardsToKeep.forEach(card => {
-                    transactions.push({
-                        id: generateUniqueId(),
-                        groupId: 'card_preset_' + Date.now(),
-                        day: 1,
-                        description: 'Cartão Cadastrado',
-                        amount: 0,
-                        type: 'credito',
-                        isFixed: false,
-                        installmentText: 'Pago',
-                        month: currentDate.getMonth(),
-                        year: currentDate.getFullYear(),
-                        cardName: card,
-                        cardBrand: 'Visa'
-                    });
-                });
-
-                updateUI();
-                await saveTransactionsToCloud();
-                hideLoading();
-                alert("Planilha zerada! Todos os lançamentos foram limpos com sucesso.");
-            }
-        }
-
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -1086,7 +1037,6 @@
                     if (editScope === 'all-months' && currentItem.groupId) {
                         const targetSeq = currentItem.year * 12 + currentItem.month;
 
-                        // ATUALIZAÇÃO EM LOTE PARA TODOS OS MESES SEGUINTES
                         transactions.forEach(t => {
                             if (t.groupId === currentItem.groupId) {
                                 const seq = t.year * 12 + t.month;
@@ -1104,7 +1054,6 @@
                             }
                         });
                     } else {
-                        // ATUALIZAÇÃO APENAS DO MÊS VIGENTE
                         currentItem.day = day;
                         currentItem.month = month;
                         currentItem.year = year;
@@ -1142,7 +1091,7 @@
                             cardBrand: cardBrand
                         });
                     }
-                } else if (installments > 1 && type === 'credito') {
+                } else if (installments > 1) {
                     const installmentAmount = amount / installments;
 
                     for (let i = 0; i < installments; i++) {
