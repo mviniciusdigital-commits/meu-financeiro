@@ -142,7 +142,7 @@
 
         .card.receitas .value { color: var(--green); }
         .card.despesas .value { color: var(--red); }
-        .card.cartao .value { color: var(--red); } /* MUDADO PARA VERMELHO */
+        .card.cartao .value { color: var(--red); }
         
         .card.saldo {
             grid-column: span 2;
@@ -661,6 +661,7 @@
         let savedCardNames = new Set();
         let editingTransactionId = null;
         let pendingAction = null;
+        let editScope = 'this-month'; // Guarda se a edição atual afeta 'this-month' ou 'all-months'
 
         function generateUniqueId() {
             if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
@@ -891,7 +892,6 @@
             balanceCard.innerText = formatCurrency(totalCardAmount);
             balanceTotal.innerText = formatCurrency(totalBalance);
 
-            // Ajuste dinâmico da cor do saldo acumulado do mês
             if (totalBalance >= 0) {
                 balanceTotal.className = "value positivo";
             } else {
@@ -909,6 +909,7 @@
                 modalDesc.innerText = "Este item se repete em outros meses. Como prefere editar?";
                 actionChoiceModal.style.display = 'flex';
             } else {
+                editScope = 'this-month';
                 executeEdit(id);
             }
         }
@@ -932,7 +933,10 @@
         btnActionThisMonth.addEventListener('click', () => {
             if (!pendingAction) return;
             actionChoiceModal.style.display = 'none';
-            if (pendingAction.type === 'edit') executeEdit(pendingAction.id);
+            if (pendingAction.type === 'edit') {
+                editScope = 'this-month';
+                executeEdit(pendingAction.id);
+            }
             if (pendingAction.type === 'delete') executeDelete(pendingAction.id, 'this-month');
             pendingAction = null;
         });
@@ -940,7 +944,10 @@
         btnActionAllMonths.addEventListener('click', () => {
             if (!pendingAction) return;
             actionChoiceModal.style.display = 'none';
-            if (pendingAction.type === 'edit') executeEdit(pendingAction.id);
+            if (pendingAction.type === 'edit') {
+                editScope = 'all-months';
+                executeEdit(pendingAction.id);
+            }
             if (pendingAction.type === 'delete') executeDelete(pendingAction.id, 'all-months');
             pendingAction = null;
         });
@@ -955,7 +962,7 @@
             if (!item) return;
 
             editingTransactionId = id;
-            formTitle.innerText = "Editar Lançamento";
+            formTitle.innerText = editScope === 'all-months' ? "Editar (Deste Mês em Diante)" : "Editar Lançamento";
             submitBtn.innerText = "Atualizar Registro";
             cancelEditBtn.style.display = "block";
 
@@ -1001,6 +1008,7 @@
 
         function resetForm() {
             editingTransactionId = null;
+            editScope = 'this-month';
             formTitle.innerText = "Novo Lançamento";
             submitBtn.innerText = "Salvar Registro";
             cancelEditBtn.style.display = "none";
@@ -1072,20 +1080,44 @@
             }
 
             if (editingTransactionId) {
-                const index = transactions.findIndex(t => t.id === editingTransactionId);
-                if (index !== -1) {
-                    transactions[index] = {
-                        ...transactions[index],
-                        day, month, year, description, amount, type, isFixed,
-                        cardName, cardBrand
-                    };
+                const currentItem = transactions.find(t => t.id === editingTransactionId);
+
+                if (currentItem) {
+                    if (editScope === 'all-months' && currentItem.groupId) {
+                        const targetSeq = currentItem.year * 12 + currentItem.month;
+
+                        transactions.forEach(t => {
+                            if (t.groupId === currentItem.groupId) {
+                                const seq = t.year * 12 + t.month;
+                                if (seq >= targetSeq) {
+                                    t.day = day;
+                                    t.description = description;
+                                    t.amount = amount;
+                                    t.type = type;
+                                    t.isFixed = isFixed;
+                                    if (type === 'credito') {
+                                        t.cardName = cardName;
+                                        t.cardBrand = cardBrand;
+                                    }
+                                }
+                            }
+                        });
+                    } else {
+                        const index = transactions.findIndex(t => t.id === editingTransactionId);
+                        if (index !== -1) {
+                            transactions[index] = {
+                                ...transactions[index],
+                                day, month, year, description, amount, type, isFixed,
+                                cardName, cardBrand
+                            };
+                        }
+                    }
                 }
                 resetForm();
             } else {
                 const groupId = generateUniqueId();
 
                 if (isFixed) {
-                    // GERAR PROJEÇÃO DE 5 ANOS (60 MESES) PARA ITENS FIXOS
                     for (let i = 0; i < 60; i++) {
                         let calcMonth = (month + i) % 12;
                         let calcYear = year + Math.floor((month + i) / 12);
@@ -1106,7 +1138,6 @@
                         });
                     }
                 } else if (installments > 1 && type === 'credito') {
-                    // GERAR PARCELAMENTO DE CARTÃO
                     const installmentAmount = amount / installments;
 
                     for (let i = 0; i < installments; i++) {
@@ -1129,7 +1160,6 @@
                         });
                     }
                 } else {
-                    // LANÇAMENTO Á VISTA / ÚNICO
                     transactions.push({
                         id: generateUniqueId(),
                         groupId: groupId,
