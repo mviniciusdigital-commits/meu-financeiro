@@ -457,7 +457,7 @@
     </div>
 
     <div class="container">
-        header>
+        <header>
             <h1>📊 Nosso Financeiro</h1>
             <div class="sync-indicator" id="sync-status">Sincronizando...</div>
         </header>
@@ -654,13 +654,13 @@
 
         function updateSyncStatus(status) {
             if (status === 'syncing') {
-                syncStatus.innerText = '☁️ Salvando...';
+                syncStatus.innerText = '☁️️ Salvando...';
                 syncStatus.style.borderColor = 'var(--blue)';
             } else if (status === 'success') {
                 syncStatus.innerText = '✅ Sincronizado';
                 syncStatus.style.borderColor = 'var(--green)';
             } else {
-                syncStatus.innerText = '⚠️ Erro ao Salvar';
+                syncStatus.innerText = '⚠️️ Erro ao Salvar';
                 syncStatus.style.borderColor = 'var(--red)';
             }
         }
@@ -680,8 +680,9 @@
             targetYearSelect.value = currentYear;
             targetMonthSelect.value = currentDate.getMonth();
 
+            // GERADOR DE OPÇÕES DE PARCELAS ATÉ 70X
             installmentsSelect.innerHTML = '<option value="1">À vista</option>';
-            for (let i = 2; i <= 24; i++) {
+            for (let i = 2; i <= 70; i++) {
                 installmentsSelect.innerHTML += `<option value="${i}">${i}x</option>`;
             }
         }
@@ -694,7 +695,6 @@
             cardNameSelect.innerHTML += '<option value="NOVO">+ Adicionar Novo Cartão</option>';
         }
 
-        // SANITIZADOR DE TEXTO DE PARCELA (LIMPANDO DATAS ISO "2026-05-05T03:00:00.000Z")
         function cleanInstallmentText(text, isFixed) {
             if (isFixed) return 'Fixo';
             if (!text || String(text).includes('.000Z') || String(text).includes('T03:00')) {
@@ -815,7 +815,7 @@
                             <div class="transaction-amount">
                                 <span class="amount-val">${formatCurrency(item.amount)}</span>
                                 <button class="action-btn" onclick="handleEditClick('${item.id}')">✏️</button>
-                                <button class="action-btn" onclick="handleDeleteClick('${item.id}')">🗑️️</button>
+                                <button class="action-btn" onclick="handleDeleteClick('${item.id}')">🗑️</button>
                             </div>
                         </div>
                     `;
@@ -1033,7 +1033,6 @@
             const year = parseInt(targetYearSelect.value, 10);
             const description = descriptionInput.value.trim();
             
-            // Sanitização de valores para evitar erros de conversão
             let cleanVal = amountInput.value.replace(/\./g, '').replace(',', '.');
             const amount = parseFloat(cleanVal);
 
