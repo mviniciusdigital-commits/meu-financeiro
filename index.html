@@ -654,13 +654,13 @@
 
         function updateSyncStatus(status) {
             if (status === 'syncing') {
-                syncStatus.innerText = '☁️️ Salvando...';
+                syncStatus.innerText = '☁️ Salvando...';
                 syncStatus.style.borderColor = 'var(--blue)';
             } else if (status === 'success') {
                 syncStatus.innerText = '✅ Sincronizado';
                 syncStatus.style.borderColor = 'var(--green)';
             } else {
-                syncStatus.innerText = '⚠️️ Erro ao Salvar';
+                syncStatus.innerText = '⚠️ Erro ao Salvar';
                 syncStatus.style.borderColor = 'var(--red)';
             }
         }
@@ -680,7 +680,6 @@
             targetYearSelect.value = currentYear;
             targetMonthSelect.value = currentDate.getMonth();
 
-            // GERADOR DE OPÇÕES DE PARCELAS ATÉ 70X
             installmentsSelect.innerHTML = '<option value="1">À vista</option>';
             for (let i = 2; i <= 70; i++) {
                 installmentsSelect.innerHTML += `<option value="${i}">${i}x</option>`;
@@ -714,7 +713,7 @@
                         return {
                             ...item,
                             day: parseInt(item.day, 10),
-                            amount: parseFloat(item.amount),
+                            amount: parseFloat(item.amount) || 0,
                             month: parseInt(item.month, 10),
                             year: parseInt(item.year, 10),
                             isFixed: isFixed,
@@ -751,7 +750,7 @@
                 t.day = parseInt(t.day, 10);
                 t.month = parseInt(t.month, 10);
                 t.year = parseInt(t.year, 10);
-                t.amount = parseFloat(t.amount);
+                t.amount = parseFloat(t.amount) || 0;
                 t.installmentText = cleanInstallmentText(t.installmentText, t.isFixed);
             });
 
@@ -774,7 +773,7 @@
         }
 
         function formatCurrency(val) {
-            return Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            return Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         }
 
         function toggleInvoiceDetails(cardId) {
@@ -791,6 +790,7 @@
             const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
             monthDisplay.innerText = `${monthNames[m]} de ${y}`;
 
+            // FILTRAGEM STRICTA DE MÊS E ANO
             const monthItems = transactions.filter(t => parseInt(t.month, 10) === m && parseInt(t.year, 10) === y);
 
             let income = 0;
@@ -800,8 +800,9 @@
             transactionList.innerHTML = '';
 
             monthItems.forEach(item => {
-                if (item.type === 'entrada') income += item.amount;
-                if (item.type === 'saida') expense += item.amount;
+                const itemVal = parseFloat(item.amount) || 0;
+                if (item.type === 'entrada') income += itemVal;
+                if (item.type === 'saida') expense += itemVal;
 
                 if (item.type === 'entrada' || item.type === 'saida') {
                     const li = document.createElement('li');
@@ -813,7 +814,7 @@
                                 <span class="details">Dia ${item.day} • ${item.installmentText || 'À vista'}</span>
                             </div>
                             <div class="transaction-amount">
-                                <span class="amount-val">${formatCurrency(item.amount)}</span>
+                                <span class="amount-val">${formatCurrency(itemVal)}</span>
                                 <button class="action-btn" onclick="handleEditClick('${item.id}')">✏️</button>
                                 <button class="action-btn" onclick="handleDeleteClick('${item.id}')">🗑️</button>
                             </div>
@@ -828,13 +829,15 @@
 
             creditItems.forEach(item => {
                 const cName = item.cardName || 'Cartão Principal';
+                const itemVal = parseFloat(item.amount) || 0;
+
                 if (!groupedCards[cName]) {
                     groupedCards[cName] = { items: [], total: 0 };
                 }
-                if (item.amount > 0) {
+                if (itemVal > 0) {
                     groupedCards[cName].items.push(item);
-                    groupedCards[cName].total += item.amount;
-                    totalCardAmount += item.amount;
+                    groupedCards[cName].total += itemVal;
+                    totalCardAmount += itemVal;
                 }
             });
 
@@ -1100,10 +1103,11 @@
                 const groupId = generateUniqueId();
 
                 if (isFixed) {
+                    // GERADOR MATEMÁTICO PURO (SEM ERRO EM VIRADA DE ANO)
                     for (let i = 0; i < 60; i++) {
-                        let d = new Date(year, month + i, day);
-                        let calcMonth = d.getMonth();
-                        let calcYear = d.getFullYear();
+                        let totalMonths = month + i;
+                        let calcMonth = totalMonths % 12;
+                        let calcYear = year + Math.floor(totalMonths / 12);
 
                         transactions.push({
                             id: generateUniqueId(),
@@ -1121,12 +1125,13 @@
                         });
                     }
                 } else if (installments > 1) {
+                    // PARCELAMENTO MATEMÁTICO PURO COM SEQUÊNCIA DE PARCELAS FIXA (1/N, 2/N)
                     const installmentAmount = amount / installments;
 
                     for (let i = 0; i < installments; i++) {
-                        let d = new Date(year, month + i, day);
-                        let calcMonth = d.getMonth();
-                        let calcYear = d.getFullYear();
+                        let totalMonths = month + i;
+                        let calcMonth = totalMonths % 12;
+                        let calcYear = year + Math.floor(totalMonths / 12);
 
                         transactions.push({
                             id: generateUniqueId(),
