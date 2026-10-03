@@ -457,7 +457,7 @@
     </div>
 
     <div class="container">
-        <header>
+        header>
             <h1>📊 Nosso Financeiro</h1>
             <div class="sync-indicator" id="sync-status">Sincronizando...</div>
         </header>
@@ -597,7 +597,6 @@
     </div>
 
     <script>
-        // LEMBRE-SE DE COLOCAR SUA URL ATUALIZADA DO GOOGLE SCRIPT ABAIXO
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxk0W3IPE-yQRh-qA7pN_-wHkb6EMO61s8wrpFHCFIhXuRwUuR_xwlyaaaudP4tfEEv/exec";
 
         const form = document.getElementById('finance-form');
@@ -695,20 +694,33 @@
             cardNameSelect.innerHTML += '<option value="NOVO">+ Adicionar Novo Cartão</option>';
         }
 
+        // SANITIZADOR DE TEXTO DE PARCELA (LIMPANDO DATAS ISO "2026-05-05T03:00:00.000Z")
+        function cleanInstallmentText(text, isFixed) {
+            if (isFixed) return 'Fixo';
+            if (!text || String(text).includes('.000Z') || String(text).includes('T03:00')) {
+                return 'À vista';
+            }
+            return String(text);
+        }
+
         async function loadTransactionsFromCloud() {
             showLoading("Buscando dados da planilha...");
             try {
                 const response = await fetch(GOOGLE_SCRIPT_URL);
                 const data = await response.json();
                 if (Array.isArray(data)) {
-                    transactions = data.map(item => ({
-                        ...item,
-                        day: parseInt(item.day, 10),
-                        amount: parseFloat(item.amount),
-                        month: parseInt(item.month, 10),
-                        year: parseInt(item.year, 10),
-                        isFixed: String(item.isFixed).toLowerCase() === 'true'
-                    }));
+                    transactions = data.map(item => {
+                        const isFixed = String(item.isFixed).toLowerCase() === 'true';
+                        return {
+                            ...item,
+                            day: parseInt(item.day, 10),
+                            amount: parseFloat(item.amount),
+                            month: parseInt(item.month, 10),
+                            year: parseInt(item.year, 10),
+                            isFixed: isFixed,
+                            installmentText: cleanInstallmentText(item.installmentText, isFixed)
+                        };
+                    });
                     
                     transactions.forEach(t => {
                         if (t.cardName) savedCardNames.add(t.cardName);
@@ -735,12 +747,12 @@
         async function saveTransactionsToCloud() {
             updateSyncStatus('syncing');
             
-            // Higieniza inteiros antes de salvar
             transactions.forEach(t => {
                 t.day = parseInt(t.day, 10);
                 t.month = parseInt(t.month, 10);
                 t.year = parseInt(t.year, 10);
                 t.amount = parseFloat(t.amount);
+                t.installmentText = cleanInstallmentText(t.installmentText, t.isFixed);
             });
 
             localStorage.setItem('local_finances_backup', JSON.stringify(transactions));
@@ -798,12 +810,12 @@
                         <div class="item-main-row">
                             <div class="transaction-info">
                                 <span class="desc">${item.description}</span>
-                                <span class="details">Dia ${item.day} • ${item.installmentText || ''}</span>
+                                <span class="details">Dia ${item.day} • ${item.installmentText || 'À vista'}</span>
                             </div>
                             <div class="transaction-amount">
                                 <span class="amount-val">${formatCurrency(item.amount)}</span>
                                 <button class="action-btn" onclick="handleEditClick('${item.id}')">✏️</button>
-                                <button class="action-btn" onclick="handleDeleteClick('${item.id}')">🗑️</button>
+                                <button class="action-btn" onclick="handleDeleteClick('${item.id}')">🗑️️</button>
                             </div>
                         </div>
                     `;
@@ -848,7 +860,7 @@
                             <div class="invoice-subitem">
                                 <div>
                                     <strong>${subItem.description}</strong>
-                                    <div style="font-size:0.7rem; color:var(--text-secondary);">Dia ${subItem.day} • Parcela ${subItem.installmentText}</div>
+                                    <div style="font-size:0.7rem; color:var(--text-secondary);">Dia ${subItem.day} • Parcela ${subItem.installmentText || '1/1'}</div>
                                 </div>
                                 <div style="display:flex; align-items:center; gap:6px;">
                                     <span>${formatCurrency(subItem.amount)}</span>
@@ -1020,7 +1032,11 @@
             const month = parseInt(targetMonthSelect.value, 10);
             const year = parseInt(targetYearSelect.value, 10);
             const description = descriptionInput.value.trim();
-            const amount = parseFloat(amountInput.value.replace(',', '.'));
+            
+            // Sanitização de valores para evitar erros de conversão
+            let cleanVal = amountInput.value.replace(/\./g, '').replace(',', '.');
+            const amount = parseFloat(cleanVal);
+
             const type = typeSelect.value;
             const isFixed = isFixedCheckbox.checked;
             const installments = parseInt(installmentsSelect.value, 10);
@@ -1057,6 +1073,7 @@
                                     t.amount = amount;
                                     t.type = type;
                                     t.isFixed = isFixed;
+                                    t.installmentText = isFixed ? 'Fixo' : t.installmentText;
                                     if (type === 'credito') {
                                         t.cardName = cardName;
                                         t.cardBrand = cardBrand;
@@ -1072,6 +1089,7 @@
                         currentItem.amount = amount;
                         currentItem.type = type;
                         currentItem.isFixed = isFixed;
+                        currentItem.installmentText = isFixed ? 'Fixo' : currentItem.installmentText;
                         if (type === 'credito') {
                             currentItem.cardName = cardName;
                             currentItem.cardBrand = cardBrand;
@@ -1083,7 +1101,6 @@
                 const groupId = generateUniqueId();
 
                 if (isFixed) {
-                    // GERADOR SEGURO DE 60 MESES FUTUROS (SEM ERRO NA VIRADA DE ANO)
                     for (let i = 0; i < 60; i++) {
                         let d = new Date(year, month + i, day);
                         let calcMonth = d.getMonth();
