@@ -449,7 +449,7 @@
 
     <div id="action-choice-modal" class="custom-modal-overlay">
         <div class="custom-modal">
-            <h3 id="modal-title">⚙️️ Lançamento Recorrente</h3>
+            <h3 id="modal-title">⚙ Lançamento Recorrente</h3>
             <p id="modal-desc">Como deseja aplicar esta ação?</p>
             <div class="modal-buttons">
                 <button class="modal-btn this-month" id="btn-action-this-month">Apenas este mês</button>
@@ -743,13 +743,11 @@
             localStorage.setItem('local_finances_backup', JSON.stringify(transactions));
 
             try {
-                // EXCLUSÃO CASO NECESSÁRIO
                 if (itemsToDeleteIds.length > 0) {
                     const { error: delError } = await _supabase.from('transactions').delete().in('id', itemsToDeleteIds);
                     if (delError) throw delError;
                 }
 
-                // GRAVAÇÃO / ATUALIZAÇÃO VIA UPSERT
                 if (itemsToSave && itemsToSave.length > 0) {
                     const { error: saveError } = await _supabase.from('transactions').upsert(itemsToSave);
                     if (saveError) throw saveError;
@@ -780,19 +778,20 @@
             const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
             monthDisplay.innerText = `${monthNames[m]} de ${y}`;
 
+            // 1. DADOS DO MÊS ATUAL CONSULTADO
             let monthItems = transactions.filter(t => Number(t.month) === m && Number(t.year) === y);
             monthItems.sort((a, b) => Number(a.day) - Number(b.day));
 
-            let income = 0;
-            let expense = 0;
-            let totalCardAmount = 0;
+            let currentMonthIncome = 0;
+            let currentMonthExpense = 0;
+            let currentMonthCardTotal = 0;
 
             transactionList.innerHTML = '';
 
             monthItems.forEach(item => {
                 const itemVal = Number(item.amount) || 0;
-                if (item.type === 'entrada') income += itemVal;
-                if (item.type === 'saida') expense += itemVal;
+                if (item.type === 'entrada') currentMonthIncome += itemVal;
+                if (item.type === 'saida') currentMonthExpense += itemVal;
 
                 if (item.type === 'entrada' || item.type === 'saida') {
                     const li = document.createElement('li');
@@ -806,7 +805,7 @@
                             <div class="transaction-amount">
                                 <span class="amount-val">${formatCurrency(itemVal)}</span>
                                 <button class="action-btn" onclick="handleEditClick('${item.id}')">✏️</button>
-                                <button class="action-btn" onclick="handleDeleteClick('${item.id}')">🗑️️</button>
+                                <button class="action-btn" onclick="handleDeleteClick('${item.id}')">🗑</button>
                             </div>
                         </div>
                     `;
@@ -827,7 +826,7 @@
                 if (itemVal > 0) {
                     groupedCards[cName].items.push(item);
                     groupedCards[cName].total += itemVal;
-                    totalCardAmount += itemVal;
+                    currentMonthCardTotal += itemVal;
                 }
             });
 
@@ -859,7 +858,7 @@
                                 </div>
                                 <div style="display:flex; align-items:center; gap:6px;">
                                     <span>${formatCurrency(subItem.amount)}</span>
-                                    <button class="action-btn" onclick="handleEditClick('${subItem.id}')">✏️️</button>
+                                    <button class="action-btn" onclick="handleEditClick('${subItem.id}')">✏</button>
                                     <button class="action-btn" onclick="handleDeleteClick('${subItem.id}')">🗑️</button>
                                 </div>
                             </div>
@@ -885,14 +884,26 @@
                 transactionList.appendChild(li);
             });
 
-            const totalBalance = income - expense - totalCardAmount;
+            // 2. CÁLCULO DO SALDO ACUMULADO CONTÍNUO (2026 -> 2027)
+            const currentTargetSeq = y * 12 + m;
+            let accumulatedBalance = 0;
 
-            balanceIncome.innerText = formatCurrency(income);
-            balanceExpense.innerText = formatCurrency(expense);
-            balanceCard.innerText = formatCurrency(totalCardAmount);
-            balanceTotal.innerText = formatCurrency(totalBalance);
+            transactions.forEach(t => {
+                const itemSeq = Number(t.year) * 12 + Number(t.month);
+                if (itemSeq <= currentTargetSeq) {
+                    const val = Number(t.amount) || 0;
+                    if (t.type === 'entrada') accumulatedBalance += val;
+                    else if (t.type === 'saida' || t.type === 'credito') accumulatedBalance -= val;
+                }
+            });
 
-            if (totalBalance >= 0) {
+            // Atualização do Dashboard
+            balanceIncome.innerText = formatCurrency(currentMonthIncome);
+            balanceExpense.innerText = formatCurrency(currentMonthExpense);
+            balanceCard.innerText = formatCurrency(currentMonthCardTotal);
+            balanceTotal.innerText = formatCurrency(accumulatedBalance);
+
+            if (accumulatedBalance >= 0) {
                 balanceTotal.className = "value positivo";
             } else {
                 balanceTotal.className = "value negativo";
@@ -1179,61 +1190,3 @@
             if (typeSelect.value === 'credito') {
                 cardFields.style.display = 'block';
             } else {
-                cardFields.style.display = 'none';
-            }
-        });
-
-        cardNameSelect.addEventListener('change', () => {
-            if (cardNameSelect.value === 'NOVO') {
-                cardNameCustom.style.display = 'block';
-            } else {
-                cardNameCustom.style.display = 'none';
-            }
-        });
-
-        document.getElementById('prev-month').addEventListener('click', () => {
-            currentDate.setMonth(currentDate.getMonth() - 1);
-            updateUI();
-        });
-
-        document.getElementById('next-month').addEventListener('click', () => {
-            currentDate.setMonth(currentDate.getMonth() + 1);
-            updateUI();
-        });
-
-        function toggleCalc() {
-            const popup = document.getElementById('calc-popup');
-            popup.style.display = popup.style.display === 'block' ? 'none' : 'block';
-        }
-
-        function pressNum(num) {
-            const screen = document.getElementById('calc-screen');
-            if (screen.value === '0') screen.value = num;
-            else screen.value += num;
-        }
-
-        function pressOp(op) {
-            const screen = document.getElementById('calc-screen');
-            screen.value += op;
-        }
-
-        function clearCalc() {
-            document.getElementById('calc-screen').value = '0';
-        }
-
-        function calculateResult() {
-            const screen = document.getElementById('calc-screen');
-            try {
-                screen.value = eval(screen.value);
-            } catch (e) {
-                screen.value = 'Erro';
-            }
-        }
-
-        // Inicialização
-        populateSelects();
-        updateCardSelectOptions();
-        loadTransactionsFromCloud();
-    </script>
-</body>
-</html>
