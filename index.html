@@ -9,6 +9,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     
+    <!-- BIBLIOTECA OFICIAL DO SUPABASE -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
     <style>
         :root {
             --bg-color: #0f0f12;
@@ -446,7 +449,7 @@
 
     <div id="action-choice-modal" class="custom-modal-overlay">
         <div class="custom-modal">
-            <h3 id="modal-title">⚙️ Lançamento Recorrente</h3>
+            <h3 id="modal-title">⚙️️ Lançamento Recorrente</h3>
             <p id="modal-desc">Como deseja aplicar esta ação?</p>
             <div class="modal-buttons">
                 <button class="modal-btn this-month" id="btn-action-this-month">Apenas este mês</button>
@@ -597,7 +600,10 @@
     </div>
 
     <script>
-        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxk0W3IPE-yQRh-qA7pN_-wHkb6EMO61s8wrpFHCFIhXuRwUuR_xwlyaaaudP4tfEEv/exec";
+        // CONFIGURAÇÃO DO SUPABASE
+        const SUPABASE_URL = "https://xksnwslhyqnncfpyqycn.supabase.co/rest/v1/";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhrc253c2xoeXFubmNmcHlxeWNuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEwMzQ2NjQsImV4cCI6MjEwNjYxMDY2NH0.3_r2JQHLpn2gDpGz-2OvbZctSAlMdxOnmZdDV5bWTxg";
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         const form = document.getElementById('finance-form');
         const formTitle = document.getElementById('form-title');
@@ -654,13 +660,13 @@
 
         function updateSyncStatus(status) {
             if (status === 'syncing') {
-                syncStatus.innerText = '☁️ Salvando...';
+                syncStatus.innerText = '☁️ Salvando no Supabase...';
                 syncStatus.style.borderColor = 'var(--blue)';
             } else if (status === 'success') {
                 syncStatus.innerText = '✅ Sincronizado';
                 syncStatus.style.borderColor = 'var(--green)';
             } else {
-                syncStatus.innerText = '⚠️ Erro ao Salvar';
+                syncStatus.innerText = '⚠️ Erro de Conexão';
                 syncStatus.style.borderColor = 'var(--red)';
             }
         }
@@ -694,33 +700,22 @@
             cardNameSelect.innerHTML += '<option value="NOVO">+ Adicionar Novo Cartão</option>';
         }
 
-        function cleanInstallmentText(text, isFixed) {
-            if (isFixed) return 'Fixo';
-            if (!text || String(text).includes('.000Z') || String(text).includes('T03:00')) {
-                return 'À vista';
-            }
-            return String(text);
-        }
-
         async function loadTransactionsFromCloud() {
-            showLoading("Buscando dados da planilha...");
+            showLoading("Carregando do Supabase...");
             try {
-                const response = await fetch(GOOGLE_SCRIPT_URL);
-                const data = await response.json();
+                const { data, error } = await _supabase.from('transactions').select('*');
+                if (error) throw error;
+
                 if (Array.isArray(data)) {
-                    transactions = data.map(item => {
-                        const isFixed = String(item.isFixed).toLowerCase() === 'true';
-                        return {
-                            ...item,
-                            day: parseInt(item.day, 10),
-                            amount: parseFloat(item.amount) || 0,
-                            month: parseInt(item.month, 10),
-                            year: parseInt(item.year, 10),
-                            isFixed: isFixed,
-                            installmentText: cleanInstallmentText(item.installmentText, isFixed)
-                        };
-                    });
-                    
+                    transactions = data.map(item => ({
+                        ...item,
+                        day: Number(item.day),
+                        month: Number(item.month),
+                        year: Number(item.year),
+                        amount: Number(item.amount),
+                        isFixed: Boolean(item.isFixed)
+                    }));
+
                     transactions.forEach(t => {
                         if (t.cardName) savedCardNames.add(t.cardName);
                     });
@@ -731,7 +726,7 @@
                     updateSyncStatus('success');
                 }
             } catch (err) {
-                console.error("Erro ao carregar dados:", err);
+                console.error("Erro ao carregar do Supabase:", err);
                 const backup = localStorage.getItem('local_finances_backup');
                 if (backup) {
                     transactions = JSON.parse(backup);
@@ -743,31 +738,26 @@
             }
         }
 
-        async function saveTransactionsToCloud() {
+        async function saveTransactionsToCloud(itemsToSave, itemsToDeleteIds = []) {
             updateSyncStatus('syncing');
-            
-            transactions.forEach(t => {
-                t.day = parseInt(t.day, 10);
-                t.month = parseInt(t.month, 10);
-                t.year = parseInt(t.year, 10);
-                t.amount = parseFloat(t.amount) || 0;
-                t.installmentText = cleanInstallmentText(t.installmentText, t.isFixed);
-            });
-
             localStorage.setItem('local_finances_backup', JSON.stringify(transactions));
-            
-            try {
-                const payload = new URLSearchParams();
-                payload.append('data', JSON.stringify(transactions));
 
-                await fetch(GOOGLE_SCRIPT_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: payload
-                });
+            try {
+                // EXCLUSÃO CASO NECESSÁRIO
+                if (itemsToDeleteIds.length > 0) {
+                    const { error: delError } = await _supabase.from('transactions').delete().in('id', itemsToDeleteIds);
+                    if (delError) throw delError;
+                }
+
+                // GRAVAÇÃO / ATUALIZAÇÃO VIA UPSERT
+                if (itemsToSave && itemsToSave.length > 0) {
+                    const { error: saveError } = await _supabase.from('transactions').upsert(itemsToSave);
+                    if (saveError) throw saveError;
+                }
+
                 updateSyncStatus('success');
             } catch (err) {
-                console.error("Erro ao salvar na nuvem:", err);
+                console.error("Erro ao salvar no Supabase:", err);
                 updateSyncStatus('error');
             }
         }
@@ -790,10 +780,7 @@
             const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
             monthDisplay.innerText = `${monthNames[m]} de ${y}`;
 
-            // FILTRAGEM RIGOROSA DE MÊS E ANO
             let monthItems = transactions.filter(t => Number(t.month) === m && Number(t.year) === y);
-
-            // ORDENAÇÃO AUTOMÁTICA POR DIA (DO DIA 1 AO DIA 31)
             monthItems.sort((a, b) => Number(a.day) - Number(b.day));
 
             let income = 0;
@@ -803,7 +790,7 @@
             transactionList.innerHTML = '';
 
             monthItems.forEach(item => {
-                const itemVal = parseFloat(item.amount) || 0;
+                const itemVal = Number(item.amount) || 0;
                 if (item.type === 'entrada') income += itemVal;
                 if (item.type === 'saida') expense += itemVal;
 
@@ -819,7 +806,7 @@
                             <div class="transaction-amount">
                                 <span class="amount-val">${formatCurrency(itemVal)}</span>
                                 <button class="action-btn" onclick="handleEditClick('${item.id}')">✏️</button>
-                                <button class="action-btn" onclick="handleDeleteClick('${item.id}')">🗑️</button>
+                                <button class="action-btn" onclick="handleDeleteClick('${item.id}')">🗑️️</button>
                             </div>
                         </div>
                     `;
@@ -832,7 +819,7 @@
 
             creditItems.forEach(item => {
                 const cName = item.cardName || 'Cartão Principal';
-                const itemVal = parseFloat(item.amount) || 0;
+                const itemVal = Number(item.amount) || 0;
 
                 if (!groupedCards[cName]) {
                     groupedCards[cName] = { items: [], total: 0 };
@@ -854,7 +841,6 @@
                 const cardGroup = groupedCards[cardName];
                 const boxId = `card-box-${index}`;
 
-                // Ordena os itens internos da fatura do cartão também por dia
                 cardGroup.items.sort((a, b) => Number(a.day) - Number(b.day));
 
                 const li = document.createElement('li');
@@ -873,7 +859,7 @@
                                 </div>
                                 <div style="display:flex; align-items:center; gap:6px;">
                                     <span>${formatCurrency(subItem.amount)}</span>
-                                    <button class="action-btn" onclick="handleEditClick('${subItem.id}')">✏️</button>
+                                    <button class="action-btn" onclick="handleEditClick('${subItem.id}')">✏️️</button>
                                     <button class="action-btn" onclick="handleDeleteClick('${subItem.id}')">🗑️</button>
                                 </div>
                             </div>
@@ -1003,21 +989,23 @@
             const item = transactions.find(t => t.id === id);
             if (!item) return;
 
+            let deletedIds = [];
+
             if (scope === 'all-months' && item.groupId) {
                 const currentSeq = Number(item.year) * 12 + Number(item.month);
-                transactions = transactions.filter(t => {
-                    if (t.groupId === item.groupId) {
-                        const seq = Number(t.year) * 12 + Number(t.month);
-                        return seq < currentSeq;
-                    }
-                    return true;
-                });
+                
+                deletedIds = transactions
+                    .filter(t => t.groupId === item.groupId && (Number(t.year) * 12 + Number(t.month)) >= currentSeq)
+                    .map(t => t.id);
+
+                transactions = transactions.filter(t => !deletedIds.includes(t.id));
             } else {
+                deletedIds = [id];
                 transactions = transactions.filter(t => t.id !== id);
             }
 
             updateUI();
-            await saveTransactionsToCloud();
+            await saveTransactionsToCloud([], deletedIds);
         }
 
         function resetForm() {
@@ -1038,8 +1026,8 @@
             e.preventDefault();
             
             const day = Number(daySelect.value);
-            const month = Number(targetMonthSelect.value);
-            const year = Number(targetYearSelect.value);
+            const startMonth = Number(targetMonthSelect.value);
+            const startYear = Number(targetYearSelect.value);
             const description = descriptionInput.value.trim();
             
             let cleanVal = amountInput.value.replace(/\./g, '').replace(',', '.');
@@ -1054,7 +1042,7 @@
                 return;
             }
 
-            showLoading("Salvando registro...");
+            showLoading("Salvando no Supabase...");
 
             let cardName = "";
             let cardBrand = "";
@@ -1064,6 +1052,8 @@
                 cardBrand = cardBrandSelect.value;
                 if (cardName) savedCardNames.add(cardName);
             }
+
+            let newOrUpdatedItems = [];
 
             if (editingTransactionId) {
                 const currentItem = transactions.find(t => t.id === editingTransactionId);
@@ -1086,13 +1076,14 @@
                                         t.cardName = cardName;
                                         t.cardBrand = cardBrand;
                                     }
+                                    newOrUpdatedItems.push(t);
                                 }
                             }
                         });
                     } else {
                         currentItem.day = day;
-                        currentItem.month = month;
-                        currentItem.year = year;
+                        currentItem.month = startMonth;
+                        currentItem.year = startYear;
                         currentItem.description = description;
                         currentItem.amount = amount;
                         currentItem.type = type;
@@ -1102,6 +1093,7 @@
                             currentItem.cardName = cardName;
                             currentItem.cardBrand = cardBrand;
                         }
+                        newOrUpdatedItems.push(currentItem);
                     }
                 }
                 resetForm();
@@ -1109,13 +1101,12 @@
                 const groupId = generateUniqueId();
 
                 if (isFixed) {
-                    // GERADOR DE MESES RECORRENTES COM MATEMÁTICA PURA
                     for (let i = 0; i < 60; i++) {
-                        let totalMonths = month + i;
+                        let totalMonths = startMonth + i;
                         let calcMonth = totalMonths % 12;
-                        let calcYear = year + Math.floor(totalMonths / 12);
+                        let calcYear = startYear + Math.floor(totalMonths / 12);
 
-                        transactions.push({
+                        const item = {
                             id: generateUniqueId(),
                             groupId: groupId,
                             day: day,
@@ -1128,17 +1119,19 @@
                             year: calcYear,
                             cardName: cardName,
                             cardBrand: cardBrand
-                        });
+                        };
+                        transactions.push(item);
+                        newOrUpdatedItems.push(item);
                     }
                 } else if (installments > 1) {
                     const installmentAmount = amount / installments;
 
                     for (let i = 0; i < installments; i++) {
-                        let totalMonths = month + i;
+                        let totalMonths = startMonth + i;
                         let calcMonth = totalMonths % 12;
-                        let calcYear = year + Math.floor(totalMonths / 12);
+                        let calcYear = startYear + Math.floor(totalMonths / 12);
 
-                        transactions.push({
+                        const item = {
                             id: generateUniqueId(),
                             groupId: groupId,
                             day: day,
@@ -1151,10 +1144,12 @@
                             year: calcYear,
                             cardName: cardName,
                             cardBrand: cardBrand
-                        });
+                        };
+                        transactions.push(item);
+                        newOrUpdatedItems.push(item);
                     }
                 } else {
-                    transactions.push({
+                    const item = {
                         id: generateUniqueId(),
                         groupId: groupId,
                         day: day,
@@ -1163,18 +1158,20 @@
                         type: type,
                         isFixed: false,
                         installmentText: 'À vista',
-                        month: month,
-                        year: year,
+                        month: startMonth,
+                        year: startYear,
                         cardName: cardName,
                         cardBrand: cardBrand
-                    });
+                    };
+                    transactions.push(item);
+                    newOrUpdatedItems.push(item);
                 }
             }
 
             resetForm();
             updateCardSelectOptions();
             updateUI();
-            await saveTransactionsToCloud();
+            await saveTransactionsToCloud(newOrUpdatedItems);
             hideLoading();
         });
 
