@@ -729,7 +729,14 @@
                 console.error("Erro ao carregar do Supabase:", err);
                 const backup = localStorage.getItem('local_finances_backup');
                 if (backup) {
-                    transactions = JSON.parse(backup);
+                    transactions = JSON.parse(backup).map(item => ({
+                        ...item,
+                        day: Number(item.day),
+                        month: Number(item.month),
+                        year: Number(item.year),
+                        amount: Number(item.amount),
+                        isFixed: Boolean(item.isFixed)
+                    }));
                     updateUI();
                 }
                 updateSyncStatus('error');
@@ -884,16 +891,22 @@
                 transactionList.appendChild(li);
             });
 
-            // 2. CÁLCULO DO SALDO ACUMULADO CONTÍNUO (2026 -> 2027)
+            // 2. CÁLCULO REVISADO DO SALDO ACUMULADO CONTÍNUO (2026 -> 2027 E ALÉM)
             const currentTargetSeq = y * 12 + m;
             let accumulatedBalance = 0;
 
             transactions.forEach(t => {
-                const itemSeq = Number(t.year) * 12 + Number(t.month);
-                if (itemSeq <= currentTargetSeq) {
+                const itemYear = Number(t.year);
+                const itemMonth = Number(t.month);
+                const itemSeq = itemYear * 12 + itemMonth;
+
+                if (!isNaN(itemSeq) && itemSeq <= currentTargetSeq) {
                     const val = Number(t.amount) || 0;
-                    if (t.type === 'entrada') accumulatedBalance += val;
-                    else if (t.type === 'saida' || t.type === 'credito') accumulatedBalance -= val;
+                    if (t.type === 'entrada') {
+                        accumulatedBalance += val;
+                    } else if (t.type === 'saida' || t.type === 'credito') {
+                        accumulatedBalance -= val;
+                    }
                 }
             });
 
@@ -1077,9 +1090,9 @@
                             if (t.groupId === currentItem.groupId) {
                                 const seq = Number(t.year) * 12 + Number(t.month);
                                 if (seq >= targetSeq) {
-                                    t.day = day;
+                                    t.day = Number(day);
                                     t.description = description;
-                                    t.amount = amount;
+                                    t.amount = Number(amount);
                                     t.type = type;
                                     t.isFixed = isFixed;
                                     t.installmentText = isFixed ? 'Fixo' : t.installmentText;
@@ -1092,11 +1105,11 @@
                             }
                         });
                     } else {
-                        currentItem.day = day;
-                        currentItem.month = startMonth;
-                        currentItem.year = startYear;
+                        currentItem.day = Number(day);
+                        currentItem.month = Number(startMonth);
+                        currentItem.year = Number(startYear);
                         currentItem.description = description;
-                        currentItem.amount = amount;
+                        currentItem.amount = Number(amount);
                         currentItem.type = type;
                         currentItem.isFixed = isFixed;
                         currentItem.installmentText = isFixed ? 'Fixo' : currentItem.installmentText;
@@ -1120,14 +1133,14 @@
                         const item = {
                             id: generateUniqueId(),
                             groupId: groupId,
-                            day: day,
+                            day: Number(day),
                             description: description,
-                            amount: amount,
+                            amount: Number(amount),
                             type: type,
                             isFixed: true,
                             installmentText: 'Fixo',
-                            month: calcMonth,
-                            year: calcYear,
+                            month: Number(calcMonth),
+                            year: Number(calcYear),
                             cardName: cardName,
                             cardBrand: cardBrand
                         };
@@ -1145,14 +1158,14 @@
                         const item = {
                             id: generateUniqueId(),
                             groupId: groupId,
-                            day: day,
+                            day: Number(day),
                             description: description,
-                            amount: installmentAmount,
+                            amount: Number(installmentAmount),
                             type: type,
                             isFixed: false,
                             installmentText: `${i + 1}/${installments}`,
-                            month: calcMonth,
-                            year: calcYear,
+                            month: Number(calcMonth),
+                            year: Number(calcYear),
                             cardName: cardName,
                             cardBrand: cardBrand
                         };
@@ -1163,14 +1176,14 @@
                     const item = {
                         id: generateUniqueId(),
                         groupId: groupId,
-                        day: day,
+                        day: Number(day),
                         description: description,
-                        amount: amount,
+                        amount: Number(amount),
                         type: type,
                         isFixed: false,
                         installmentText: 'À vista',
-                        month: startMonth,
-                        year: startYear,
+                        month: Number(startMonth),
+                        year: Number(startYear),
                         cardName: cardName,
                         cardBrand: cardBrand
                     };
@@ -1190,3 +1203,61 @@
             if (typeSelect.value === 'credito') {
                 cardFields.style.display = 'block';
             } else {
+                cardFields.style.display = 'none';
+            }
+        });
+
+        cardNameSelect.addEventListener('change', () => {
+            if (cardNameSelect.value === 'NOVO') {
+                cardNameCustom.style.display = 'block';
+            } else {
+                cardNameCustom.style.display = 'none';
+            }
+        });
+
+        document.getElementById('prev-month').addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() - 1);
+            updateUI();
+        });
+
+        document.getElementById('next-month').addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            updateUI();
+        });
+
+        function toggleCalc() {
+            const popup = document.getElementById('calc-popup');
+            popup.style.display = popup.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function pressNum(num) {
+            const screen = document.getElementById('calc-screen');
+            if (screen.value === '0') screen.value = num;
+            else screen.value += num;
+        }
+
+        function pressOp(op) {
+            const screen = document.getElementById('calc-screen');
+            screen.value += op;
+        }
+
+        function clearCalc() {
+            document.getElementById('calc-screen').value = '0';
+        }
+
+        function calculateResult() {
+            const screen = document.getElementById('calc-screen');
+            try {
+                screen.value = eval(screen.value);
+            } catch (e) {
+                screen.value = 'Erro';
+            }
+        }
+
+        // Inicialização
+        populateSelects();
+        updateCardSelectOptions();
+        loadTransactionsFromCloud();
+    </script>
+</body>
+</html>
