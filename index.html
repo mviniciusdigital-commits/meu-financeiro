@@ -328,8 +328,27 @@
             cursor: pointer;
         }
 
-        .action-btn.zero {
+        /* BOTÃO QUADRADO DE CHECK VERDE */
+        .btn-check-square {
+            width: 28px;
+            height: 28px;
+            background-color: #002d1d;
+            border: 1px solid var(--green);
             color: var(--green);
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-check-square:active {
+            transform: scale(0.92);
+            background-color: var(--green);
+            color: #fff;
         }
 
         .action-btn.delete {
@@ -610,7 +629,7 @@
     <script>
         // CONFIGURAÇÃO DO SUPABASE
         const SUPABASE_URL = "https://xksnwslhyqnncfpyqycn.supabase.co";
-        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhrc253c2xoeXFubmNmcHlxeWNuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEwMzQ2NjQsImV4cCI6MjEwNjYxMDY2NH0.3_r2JQHLpn2gDpGz-2OvbZctSAlMdxOnmZdDV5bWTxg";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhrc253c2xoeXFubmNmcHlxeWNuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEwMzQ2NjQsImV4cCI62106610664f0.3_r2JQHLpn2gDpGz-2OvbZctSAlMdxOnmZdDV5bWTxg";
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         const form = document.getElementById('finance-form');
@@ -812,7 +831,7 @@
                     const li = document.createElement('li');
                     li.className = `transaction-item ${item.type}`;
                     
-                    const zeroBtnHTML = item.type === 'saida' ? `<button class="action-btn zero" onclick="handleZeroClick('${item.id}')" title="Zerar despesa">✔️</button>` : '';
+                    const zeroBtnHTML = item.type === 'saida' ? `<button class="btn-check-square" onclick="handleZeroClick('${item.id}')" title="Zerar despesa">✔️</button>` : '';
 
                     li.innerHTML = `
                         <div class="item-main-row">
@@ -875,7 +894,6 @@
                                 </div>
                                 <div style="display:flex; align-items:center; gap:6px;">
                                     <span>${formatCurrency(subItem.amount)}</span>
-                                    <button class="action-btn zero" onclick="handleZeroClick('${subItem.id}')" title="Zerar despesa">✔️</button>
                                     <button class="action-btn" onclick="handleEditClick('${subItem.id}')">✏️</button>
                                     <button class="action-btn delete" onclick="handleDeleteClick('${subItem.id}')">🗑️</button>
                                 </div>
@@ -883,6 +901,9 @@
                         `;
                     });
                 }
+
+                // Botão de check para zerar TODOS os lançamentos do cartão
+                const zeroCardBtnHTML = cardGroup.items.length > 0 ? `<button class="btn-check-square" onclick="event.stopPropagation(); handleZeroCardClick('${cardName}')" title="Zerar fatura do cartão">✔️</button>` : '';
 
                 li.innerHTML = `
                     <div class="item-main-row" onclick="toggleInvoiceDetails('${boxId}')" style="cursor:pointer;">
@@ -892,6 +913,7 @@
                         </div>
                         <div class="transaction-amount">
                             <span class="amount-val">${formatCurrency(cardGroup.total)}</span>
+                            ${zeroCardBtnHTML}
                             <span style="font-size:0.8rem; margin-left:4px;">▼</span>
                         </div>
                     </div>
@@ -902,7 +924,7 @@
                 transactionList.appendChild(li);
             });
 
-            // 2. CÁLCULO REVISADO DO SALDO ACUMULADO CONTÍNUO (2026 -> 2027 E ALÉM)
+            // 2. CÁLCULO REVISADO DO SALDO ACUMULADO CONTÍNUO
             const currentTargetSeq = y * 12 + m;
             let accumulatedBalance = 0;
 
@@ -941,6 +963,19 @@
             item.amount = 0;
             updateUI();
             await saveTransactionsToCloud([item]);
+        }
+
+        async function handleZeroCardClick(cardName) {
+            const m = Number(currentDate.getMonth());
+            const y = Number(currentDate.getFullYear());
+
+            const cardItems = transactions.filter(t => t.type === 'credito' && t.cardName === cardName && Number(t.month) === m && Number(t.year) === y);
+
+            if (cardItems.length === 0) return;
+
+            cardItems.forEach(t => t.amount = 0);
+            updateUI();
+            await saveTransactionsToCloud(cardItems);
         }
 
         function handleEditClick(id) {
