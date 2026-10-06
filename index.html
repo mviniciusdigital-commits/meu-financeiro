@@ -328,6 +328,10 @@
             cursor: pointer;
         }
 
+        .action-btn.zero {
+            color: var(--green);
+        }
+
         .action-btn.delete {
             color: var(--red);
         }
@@ -807,6 +811,9 @@
                 if (item.type === 'entrada' || item.type === 'saida') {
                     const li = document.createElement('li');
                     li.className = `transaction-item ${item.type}`;
+                    
+                    const zeroBtnHTML = item.type === 'saida' ? `<button class="action-btn zero" onclick="handleZeroClick('${item.id}')" title="Zerar despesa">✔️</button>` : '';
+
                     li.innerHTML = `
                         <div class="item-main-row">
                             <div class="transaction-info">
@@ -815,6 +822,7 @@
                             </div>
                             <div class="transaction-amount">
                                 <span class="amount-val">${formatCurrency(itemVal)}</span>
+                                ${zeroBtnHTML}
                                 <button class="action-btn" onclick="handleEditClick('${item.id}')">✏️</button>
                                 <button class="action-btn delete" onclick="handleDeleteClick('${item.id}')">🗑</button>
                             </div>
@@ -834,11 +842,9 @@
                 if (!groupedCards[cName]) {
                     groupedCards[cName] = { items: [], total: 0 };
                 }
-                if (itemVal > 0) {
-                    groupedCards[cName].items.push(item);
-                    groupedCards[cName].total += itemVal;
-                    currentMonthCardTotal += itemVal;
-                }
+                groupedCards[cName].items.push(item);
+                groupedCards[cName].total += itemVal;
+                currentMonthCardTotal += itemVal;
             });
 
             savedCardNames.forEach(cardName => {
@@ -869,6 +875,7 @@
                                 </div>
                                 <div style="display:flex; align-items:center; gap:6px;">
                                     <span>${formatCurrency(subItem.amount)}</span>
+                                    <button class="action-btn zero" onclick="handleZeroClick('${subItem.id}')" title="Zerar despesa">✔️</button>
                                     <button class="action-btn" onclick="handleEditClick('${subItem.id}')">✏️</button>
                                     <button class="action-btn delete" onclick="handleDeleteClick('${subItem.id}')">🗑️</button>
                                 </div>
@@ -925,6 +932,15 @@
             } else {
                 balanceTotal.className = "value negativo";
             }
+        }
+
+        async function handleZeroClick(id) {
+            const item = transactions.find(t => t.id === id);
+            if (!item) return;
+
+            item.amount = 0;
+            updateUI();
+            await saveTransactionsToCloud([item]);
         }
 
         function handleEditClick(id) {
@@ -1065,7 +1081,7 @@
             const isFixed = isFixedCheckbox.checked;
             const installments = Number(installmentsSelect.value);
 
-            if (isNaN(amount) || amount <= 0) {
+            if (isNaN(amount) || amount < 0) {
                 alert("Por favor, insira um valor válido.");
                 return;
             }
