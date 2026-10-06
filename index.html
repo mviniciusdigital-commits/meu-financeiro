@@ -328,6 +328,10 @@
             cursor: pointer;
         }
 
+        .action-btn.delete {
+            color: var(--red);
+        }
+
         .invoice-details-box {
             display: none;
             margin-top: 8px;
@@ -812,7 +816,7 @@
                             <div class="transaction-amount">
                                 <span class="amount-val">${formatCurrency(itemVal)}</span>
                                 <button class="action-btn" onclick="handleEditClick('${item.id}')">✏️</button>
-                                <button class="action-btn" onclick="handleDeleteClick('${item.id}')">🗑</button>
+                                <button class="action-btn delete" onclick="handleDeleteClick('${item.id}')">🗑</button>
                             </div>
                         </div>
                     `;
@@ -865,8 +869,8 @@
                                 </div>
                                 <div style="display:flex; align-items:center; gap:6px;">
                                     <span>${formatCurrency(subItem.amount)}</span>
-                                    <button class="action-btn" onclick="handleEditClick('${subItem.id}')">✏</button>
-                                    <button class="action-btn" onclick="handleDeleteClick('${subItem.id}')">🗑️</button>
+                                    <button class="action-btn" onclick="handleEditClick('${subItem.id}')">✏️</button>
+                                    <button class="action-btn delete" onclick="handleDeleteClick('${subItem.id}')">🗑️</button>
                                 </div>
                             </div>
                         `;
